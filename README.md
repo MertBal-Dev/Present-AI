@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <strong>![Present AI Demo](https://github.com/MertBal-Dev/Present-AI/blob/main/demo.gif?raw=true)</strong>
+  <img src="https://github.com/MertBal-Dev/Present-AI/blob/main/demo.gif?raw=true" alt="Present AI Demo GIF"/>
 </p>
 
 ---
