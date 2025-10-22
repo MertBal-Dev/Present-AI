@@ -15,7 +15,7 @@
 <p align="center">
   <em>Projenin arayüzünü gösteren kısa bir GIF veya video eklemeniz şiddetle tavsiye edilir.</em>
   <br>
-  <strong>[PROJE GIF'İ VEYA EKRAN GÖRÜNTÜSÜ BURAYA]</strong>
+  <strong>[https://github.com/MertBal-Dev/Present-AI/blob/main/demo.gif]</strong>
 </p>
 
 ---
