@@ -1,0 +1,13 @@
+{
+  "name": "present-ai-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "install:all": "npm install && (cd client && npm install) && (cd server && npm install)",
+    "dev": "concurrently \"npm run dev --prefix server\" \"npm start --prefix client\"",
+    "start": "npm start --prefix server"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

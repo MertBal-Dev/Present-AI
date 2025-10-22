@@ -1,0 +1,17 @@
+# Bağımlılıklar (Her iki proje için de)
+client/node_modules
+server/node_modules
+node_modules
+
+# Üretim (Build) çıktıları
+client/build
+
+# Ortam değişkenleri dosyaları
+client/.env
+server/.env
+
+# Loglar ve sistem dosyaları
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.DS_Store
