@@ -20,7 +20,7 @@
 
 ## 🚀 Canlı Demo
 
-**Projeyi canlı olarak deneyimlemek için:** **[CANLI DEMO LİNKİNİZ BURAYA]** *(Örn: Vercel, Netlify)*
+**Projeyi canlı olarak deneyimlemek için:** **[https://present-ai-suet.vercel.app/](https://present-ai-suet.vercel.app/)**
 
 ---
 
