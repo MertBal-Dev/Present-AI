@@ -99,13 +99,7 @@ export function SlideImage({ keywords }) {
 }
 
 function SortableContentItem({ id, item, onUpdate, onRemove }) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-  } = useSortable({ id });
+  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id });
 
   const style = {
     transform: transform ? `translateY(${transform.y}px)` : '',
@@ -113,13 +107,45 @@ function SortableContentItem({ id, item, onUpdate, onRemove }) {
   };
 
   return (
-    <div ref={setNodeRef} style={style} className="flex items-start space-x-2 mb-2 bg-white dark:bg-dark-bg rounded-lg p-2 shadow-sm border border-gray-200 dark:border-dark-border">
-      <button {...attributes} {...listeners} className="cursor-grab p-2 text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md"><GripVertical className="w-4 h-4" /></button>
-      <input type="text" value={item} onChange={onUpdate} className="flex-1 bg-transparent px-3 py-2 border-none outline-none focus:ring-2 focus:ring-blue-300 dark:focus:ring-dark-primary rounded-md text-gray-900 dark:text-dark-text" />
-      <button onClick={onRemove} className="p-2 text-red-500 hover:bg-red-100 dark:hover:bg-red-500/10 rounded-lg transition"><X className="w-4 h-4" /></button>
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="flex items-center justify-between flex-wrap sm:flex-nowrap gap-3 mb-2 bg-white dark:bg-dark-bg rounded-lg p-3 shadow-sm border border-gray-200 dark:border-dark-border"
+    >
+      {/* Tutamaç + Metin Alanı */}
+      <div className="flex items-center gap-2 flex-1 min-w-0">
+        <button
+          {...attributes}
+          {...listeners}
+          className="cursor-grab p-2 text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md flex-shrink-0"
+        >
+          <GripVertical className="w-4 h-4" />
+        </button>
+
+        <input
+          type="text"
+          value={item}
+          onChange={onUpdate}
+          className="flex-1 min-w-0 bg-transparent px-3 py-2 border-none outline-none focus:ring-2 focus:ring-blue-300 dark:focus:ring-dark-primary rounded-md text-gray-900 dark:text-dark-text text-sm sm:text-base break-words overflow-hidden"
+          style={{
+            wordWrap: 'break-word',
+            overflowWrap: 'break-word',
+          }}
+        />
+      </div>
+
+      {/* Silme Butonu */}
+      <button
+        onClick={onRemove}
+        className="p-2 text-red-500 hover:bg-red-100 dark:hover:bg-red-500/10 rounded-lg transition flex-shrink-0 sm:self-auto self-start"
+      >
+        <X className="w-4 h-4" />
+      </button>
     </div>
   );
 }
+
+
 
 function SlideEditor({ slide, slideIndex, onUpdate, onDelete, dragHandleProps }) {
   const [isExpanded, setIsExpanded] = useState(true);

@@ -71,24 +71,47 @@ export const usePresentationState = () => {
     }
   };
 
-  const handlePresentationChange = useCallback((path, value) => {
-    const applyChange = (data) => {
-        if (!data) return null;
-        
-        const newData = JSON.parse(JSON.stringify(data));
-        let current = newData;
-        for (let i = 0; i < path.length - 1; i++) {
-            current = current[path[i]];
-        }
-        current[path[path.length - 1]] = value;
-        return newData;
-    };
+const handlePresentationChange = useCallback((path, value) => {
+  const applyChange = (data) => {
+    if (!data) return null;
 
-    const newData = applyChange(presentationData);
-    if (newData) {
-        updateStateAndHistory(newData);
+    const newData = JSON.parse(JSON.stringify(data));
+    let current = newData;
+
+    try {
+      for (let i = 0; i < path.length - 1; i++) {
+        const key = path[i];
+
+        // Eğer ara adım undefined ise otomatik oluştur
+        if (current[key] === undefined || current[key] === null) {
+          // Bir sonraki adım sayıysa (örneğin bir array index'i)
+          if (!isNaN(path[i + 1])) {
+            current[key] = [];
+          } else {
+            current[key] = {};
+          }
+        }
+
+        current = current[key];
+      }
+
+      const lastKey = path[path.length - 1];
+      current[lastKey] = value;
+
+      return newData;
+    } catch (error) {
+      console.error("⚠️ applyChange hatası:", error.message, "Path:", path, "Value:", value);
+      alert("Bir hata oluştu. Bu alan şu anda düzenlenemiyor.");
+      return null;
     }
-  }, [presentationData, updateStateAndHistory]);
+  };
+
+  const newData = applyChange(presentationData);
+  if (newData) {
+    updateStateAndHistory(newData);
+  }
+}, [presentationData, updateStateAndHistory]);
+
 
   const handleDragEnd = useCallback((event) => {
     const { active, over } = event;
