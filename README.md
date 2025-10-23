@@ -115,7 +115,7 @@ Bu proje sadece mevcut özellikleriyle sınırlı kalmayıp, aşağıdaki gibi p
 **İsmail Mert Bal**
 
 * **GitHub:** [@MertBal-Dev](https://github.com/MertBal-Dev)
-* **LinkedIn:** [LinkedIn Profiliniz](https://www.linkedin.com/in/mertbal-dev/)
+* **LinkedIn:** [Mertbal-Dev](https://www.linkedin.com/in/mertbal-dev/)
 
 Bu projenin geliştirilme sürecinde karşılaşılan zorluklar ve çözümler hakkında daha fazla bilgi edinmek veya potansiyel iş fırsatları hakkında görüşmek için benimle iletişime geçmekten çekinmeyin.
 
