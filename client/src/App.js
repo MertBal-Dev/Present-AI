@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react'  
 import { motion, AnimatePresence } from 'framer-motion'
 import { usePresentationState } from './hooks/usePresentationState'
@@ -28,6 +27,10 @@ function App() {
     handleDeleteSlide,
     handleAddSlide,
     handleDownload,
+    undo,        
+    redo,        
+    canUndo,    
+    canRedo,     
   } = usePresentationState()
 
   const [theme, setTheme] = useState('gradient-blue')
@@ -35,22 +38,37 @@ function App() {
   const [isPresentationMode, setIsPresentationMode] = useState(false)
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0)
   const [showTemplatePreview, setShowTemplatePreview] = useState(null)
-  
-  
   const [themeMode, setThemeMode] = useState('light');
 
-  
   const toggleTheme = () => {
     setThemeMode(prevMode => (prevMode === 'light' ? 'dark' : 'light'));
   };
 
-  
   useEffect(() => {
     const root = window.document.documentElement;
     root.classList.remove(themeMode === 'light' ? 'dark' : 'light');
     root.classList.add(themeMode);
   }, [themeMode]);
 
+  
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      }
+      
+      
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+        e.preventDefault();
+        redo();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [undo, redo]);
 
   const currentTheme = themes[theme] || themes['gradient-blue']
 
@@ -58,7 +76,6 @@ function App() {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' })
     setMobileMenuOpen(false)
   }
-  
 
   const loadTemplate = (template) => {
     const processedData = {
@@ -85,7 +102,6 @@ function App() {
           return block
         }),
       })),
-      
       bibliography: (template.data.bibliography || []).map(item => {
         return typeof item === 'string' ? { citation: item } : item;
       })
@@ -157,7 +173,7 @@ function App() {
           setShowTemplatePreview={setShowTemplatePreview}
         />
 
-{isLoading && (
+        {isLoading && (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center">
             <div className="bg-white dark:bg-dark-card rounded-2xl p-8 flex flex-col items-center space-y-4 shadow-2xl">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -179,6 +195,10 @@ function App() {
             handleDragEnd={handleDragEnd}
             handleDeleteSlide={handleDeleteSlide}
             handleAddSlide={handleAddSlide}
+            undo={undo}           
+            redo={redo}           
+            canUndo={canUndo}     
+            canRedo={canRedo}
           />
         )}
         
@@ -186,7 +206,6 @@ function App() {
       </main>
       
       <Footer scrollToSection={scrollToSection} />
-
 
       {/* Template Preview Modalı */}
       <AnimatePresence>
@@ -204,18 +223,18 @@ function App() {
               transition={{ duration: 0.3, ease: 'easeInOut' }}
               className="bg-white dark:bg-dark-card rounded-3xl max-w-5xl w-full h-full max-h-[90vh] flex flex-col overflow-hidden shadow-2xl"
             >
-              <div className="p-6 border-b border-gray-200 flex justify-between items-start">
+              <div className="p-6 border-b border-gray-200 dark:border-dark-border flex justify-between items-start">
                 <div>
-                  <h3 className="text-2xl font-bold mb-1">
+                  <h3 className="text-2xl font-bold mb-1 dark:text-dark-text">
                     {showTemplatePreview.title}
                   </h3>
-                  <p className="text-gray-600">
+                  <p className="text-gray-600 dark:text-dark-text-secondary">
                     {showTemplatePreview.description}
                   </p>
                 </div>
                 <button
                   onClick={() => setShowTemplatePreview(null)}
-                  className="p-2 hover:bg-gray-100 rounded-full transition"
+                  className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition"
                 >
                   <X className="w-6 h-6" />
                 </button>
@@ -228,7 +247,7 @@ function App() {
                     {showTemplatePreview.preview.icon}
                   </div>
                   <div className="flex-grow"></div>
-                  <div className="flex gap-4 dark:text-dark-text">
+                  <div className="flex gap-4">
                     <button
                       onClick={() => loadTemplate(showTemplatePreview)}
                       className="flex-1 bg-gradient-to-r from-blue-500 to-purple-600 text-white py-4 rounded-xl font-bold hover:shadow-lg transition flex items-center justify-center space-x-2"
@@ -238,25 +257,25 @@ function App() {
                     </button>
                     <button
                       onClick={() => setShowTemplatePreview(null)}
-                      className="px-8 py-4 border-2 border-gray-200 rounded-xl font-bold hover:bg-gray-50 transition"
+                      className="px-8 py-4 border-2 border-gray-200 dark:border-dark-border rounded-xl font-bold hover:bg-gray-50 dark:hover:bg-gray-700 transition dark:text-dark-text"
                     >
                       Kapat
                     </button>
                   </div>
                 </div>
                 <div className="p-8 bg-gray-50/70 dark:bg-dark-bg/70 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent">
-                  <h4 className="font-bold text-lg mb-4">Örnek Slaytlar:</h4>
+                  <h4 className="font-bold text-lg mb-4 dark:text-dark-text">Örnek Slaytlar:</h4>
                   <div className="space-y-4">
                     {showTemplatePreview.data.slides.map((slide, idx) => (
                       <div
                         key={idx}
-                        className="p-4 bg-white rounded-xl border border-gray-200 shadow-sm"
+                        className="p-4 bg-white dark:bg-dark-card rounded-xl border border-gray-200 dark:border-dark-border shadow-sm"
                       >
-                        <h5 className="font-bold mb-2 text-blue-600">
+                        <h5 className="font-bold mb-2 text-blue-600 dark:text-blue-400">
                           Slayt {slide.slideNumber}: {slide.title}
                         </h5>
                         <div
-                          className="text-sm text-gray-700 space-y-2"
+                          className="text-sm text-gray-700 dark:text-dark-text-secondary space-y-2"
                           dangerouslySetInnerHTML={{
                             __html: slide.content
                               .map((b) =>

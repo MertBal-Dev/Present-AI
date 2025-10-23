@@ -193,7 +193,6 @@ function SlideEditor({ slide, slideIndex, onUpdate, onDelete, dragHandleProps })
                             const handleContentDragEnd = (event) => {
                                 const { active, over } = event;
                                 if (active.id !== over.id) {
-                                    // Düzeltme: `active.id` ve `over.id` zaten indekstir.
                                     const oldIndex = active.id;
                                     const newIndex = over.id;
                                     const reorderedItems = arrayMove(block.items, oldIndex, newIndex);

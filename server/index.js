@@ -112,6 +112,7 @@ function wrapText(text, font, fontSize, maxWidth) {
 }
 
 // --- GÖRSEL ARAMA İYİLEŞTİRMELERİ ---
+
 async function searchGoogleImages(query, page = 1) {
   if (!process.env.GOOGLE_API_KEY || !process.env.GOOGLE_CX_ID) {
     console.log("Google API anahtarları yapılandırılmamış, bu kaynak atlanıyor.");
@@ -146,7 +147,12 @@ async function searchGoogleImages(query, page = 1) {
     }
     return null;
   } catch (error) {
-    console.error(`Google Görsel Arama hatası (${query}):`, error.response?.data?.error?.message || error.message);
+    const errorMessage = error.response?.data?.error?.message || error.message;
+    console.error(`Google Görsel Arama hatası (${query}):`, errorMessage);
+    
+    if (errorMessage.includes('Quota exceeded')) {
+      throw new Error('Google Quota Exceeded');
+    }
     return null;
   }
 }
@@ -214,25 +220,30 @@ app.post('/api/search-image', async (req, res) => {
     }
 
     let imageUrl = null;
-    let attempts = 0;
-    const maxAttempts = 3;
 
-    while (!imageUrl && attempts < maxAttempts) {
-      const currentPage = page + attempts;
-
-      let candidateUrl = await searchGoogleImages(query, currentPage);
-      if (candidateUrl && await validateImageQuality(candidateUrl)) {
-        imageUrl = candidateUrl;
-        break;
-      }
-
-      candidateUrl = await searchPexelsImages(query, currentPage);
-      if (candidateUrl && await validateImageQuality(candidateUrl)) {
-        imageUrl = candidateUrl;
-        break;
-      }
-
-      attempts++;
+    try {
+        console.log(`[ImageSearch] Google'da aranıyor (deneme ${page}): "${query}"`);
+        const candidateUrl = await searchGoogleImages(query, page);
+        if (candidateUrl && await validateImageQuality(candidateUrl)) {
+            imageUrl = candidateUrl;
+        }
+    } catch (error) {
+        if (error.message === 'Google Quota Exceeded') {
+            console.log(`[ImageSearch] Google kotası dolu, Pexels'e geçiliyor (deneme ${page}): "${query}"`);
+            const candidateUrl = await searchPexelsImages(query, page);
+            if (candidateUrl && await validateImageQuality(candidateUrl)) {
+                imageUrl = candidateUrl;
+            }
+        }
+    }
+    
+    
+    if (!imageUrl) {
+        console.log(`[ImageSearch] Google'da sonuç yok, Pexels deneniyor: "${query}"`);
+        const candidateUrl = await searchPexelsImages(query, page);
+        if (candidateUrl && await validateImageQuality(candidateUrl)) {
+            imageUrl = candidateUrl;
+        }
     }
 
     if (imageUrl) {
@@ -382,7 +393,7 @@ app.post('/api/generate-content', async (req, res) => {
       throw new Error("Tüm AI modelleri denendi ancak hiçbiri yanıt vermedi.");
     }
 
-    rawTextFromAI = result.response.text();
+   rawTextFromAI = result.response.text();
     const presentationData = JSON.parse(rawTextFromAI);
 
     const imageSearchPromises = presentationData.slides.map(slide => {
@@ -391,29 +402,25 @@ app.post('/api/generate-content', async (req, res) => {
       }
       const query = slide.imageKeywords.query.trim();
 
-
       return (async () => {
         let imageUrl = null;
-        let attempts = 0;
-        const maxAttempts = 2;
-
-        while (!imageUrl && attempts < maxAttempts) {
-          const currentPage = attempts + 1;
-
-          // Önce Google'ı, sonra Pexels'i dene.
-          let candidateUrl = await searchGoogleImages(query, currentPage);
-          if (candidateUrl && await validateImageQuality(candidateUrl)) {
-            imageUrl = candidateUrl;
-            break;
-          }
-
-          candidateUrl = await searchPexelsImages(query, currentPage);
-          if (candidateUrl && await validateImageQuality(candidateUrl)) {
-            imageUrl = candidateUrl;
-            break;
-          }
-          attempts++;
+        
+        try {
+            console.log(`[ImageSearch] Google'da aranıyor: "${query}"`);
+            const candidateUrl = await searchGoogleImages(query, 1);
+            if (candidateUrl && await validateImageQuality(candidateUrl)) {
+                imageUrl = candidateUrl;
+            }
+        } catch (error) {
+            if (error.message === 'Google Quota Exceeded') {
+                console.log(`[ImageSearch] Google kotası dolu, Pexels'e geçiliyor: "${query}"`);
+                const candidateUrl = await searchPexelsImages(query, 1);
+                if (candidateUrl && await validateImageQuality(candidateUrl)) {
+                    imageUrl = candidateUrl;
+                }
+            }
         }
+
         return imageUrl;
       })();
     });

@@ -9,9 +9,8 @@ export const usePresentationState = () => {
   const [error, setError] = useState('');
   const [aiModel, setAiModel] = useState('gemini-2.5-pro');
 
-  
-  const [history, setHistory] = useState([null]);
-  const [historyIndex, setHistoryIndex] = useState(0);
+  const [history, setHistory] = useState([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
 
   const undo = useCallback(() => {
     if (historyIndex > 0) {
@@ -29,14 +28,22 @@ export const usePresentationState = () => {
     }
   }, [history, historyIndex]);
 
-  const updateStateAndHistory = (newData) => {
-    const newHistory = history.slice(0, historyIndex + 1);
-    newHistory.push(newData);
+  const updateStateAndHistory = useCallback((newData) => {
     
-    setHistory(newHistory);
-    setHistoryIndex(newHistory.length - 1);
+    const newHistory = history.slice(0, historyIndex + 1);
+    
+    
+    newHistory.push(JSON.parse(JSON.stringify(newData))); 
+    
+    
+    const limitedHistory = newHistory.length > 150 
+      ? newHistory.slice(-150) 
+      : newHistory;
+    
+    setHistory(limitedHistory);
+    setHistoryIndex(limitedHistory.length - 1);
     setPresentationData(newData);
-  };
+  }, [history, historyIndex]);
 
   const handleGeneratePresentation = async () => {
     if (!topic) {
@@ -49,9 +56,9 @@ export const usePresentationState = () => {
     try {
       const data = await api.generateContent(topic, aiModel);
       
-      const initialHistory = [null, data];
-      setHistory(initialHistory);
-      setHistoryIndex(1);
+      const initialData = JSON.parse(JSON.stringify(data));
+      setHistory([initialData]);
+      setHistoryIndex(0);
       setPresentationData(data);
     } catch (error) {
       console.error("Sunum oluşturulurken bir hata oluştu:", error);
@@ -64,7 +71,7 @@ export const usePresentationState = () => {
     }
   };
 
-  const handlePresentationChange = (path, value) => {
+  const handlePresentationChange = useCallback((path, value) => {
     const applyChange = (data) => {
         if (!data) return null;
         
@@ -81,9 +88,9 @@ export const usePresentationState = () => {
     if (newData) {
         updateStateAndHistory(newData);
     }
-  };
+  }, [presentationData, updateStateAndHistory]);
 
-  const handleDragEnd = (event) => {
+  const handleDragEnd = useCallback((event) => {
     const { active, over } = event;
     if (active && over && active.id !== over.id) {
         const oldIndex = presentationData.slides.findIndex((s) => s.slideNumber === active.id);
@@ -96,34 +103,34 @@ export const usePresentationState = () => {
         const newData = { ...presentationData, slides: updatedSlides };
         updateStateAndHistory(newData);
     }
-  };
+  }, [presentationData, updateStateAndHistory]);
 
-  const handleDeleteSlide = (slideIndexToDelete) => {
+  const handleDeleteSlide = useCallback((slideIndexToDelete) => {
     const newSlides = presentationData.slides
       .filter((_, index) => index !== slideIndexToDelete)
       .map((slide, index) => ({ ...slide, slideNumber: index + 1 }));
     
     const newData = { ...presentationData, slides: newSlides };
     updateStateAndHistory(newData);
-  };
+  }, [presentationData, updateStateAndHistory]);
 
-  const handleAddSlide = () => {
+  const handleAddSlide = useCallback(() => {
     const newSlide = {
       slideNumber: presentationData.slides.length + 1,
       title: 'Yeni Slayt',
       layout: 'title-and-content',
       content: [{ type: 'paragraph', value: '<p>İçerik ekleyin...</p>' }],
+      notes: '',
       imageKeywords: { query: 'abstract background' }
     };
     const newSlides = [...presentationData.slides, newSlide];
     const newData = { ...presentationData, slides: newSlides };
     updateStateAndHistory(newData);
-  };
+  }, [presentationData, updateStateAndHistory]);
 
   const handleDownload = async (format, theme) => {
     if (!presentationData) return;
     try {
-        
         await api.downloadPresentation(format, presentationData, theme);
     } catch(err) {
         console.error(`'${format}' formatında indirilirken hata oluştu:`, err);
@@ -145,7 +152,7 @@ export const usePresentationState = () => {
     handleDownload,
     undo,
     redo,
-    canUndo: historyIndex > 1, 
+    canUndo: historyIndex > 0,
     canRedo: historyIndex < history.length - 1,
   };
 };

@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import SlideImage from './SlideImage';
+import { SlideImage } from '../SlideEditor';
 import { ChevronLeft, ChevronRight, X } from '../common/Icons';
 
 
