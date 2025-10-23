@@ -1,4 +1,6 @@
-const API_BASE_URL = 'http://localhost:5001/api';
+const API_BASE_URL = process.env.NODE_ENV === 'production' 
+  ? process.env.REACT_APP_API_BASE_URL 
+  : 'http://localhost:5001/api';
 
 export const generateContent = async (topic, modelName) => {
   try {
@@ -18,7 +20,6 @@ export const generateContent = async (topic, modelName) => {
     throw error; 
   }
 };
-
 
 export const downloadPresentation = async (format, presentationData, theme) => {
     try {
