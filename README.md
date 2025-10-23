@@ -13,9 +13,7 @@
 </p>
 
 <p align="center">
-  <em>Projenin arayüzünü gösteren kısa bir GIF veya video eklemeniz şiddetle tavsiye edilir.</em>
-  <br>
-  <strong>[PROJE GIF'İ VEYA EKRAN GÖRÜNTÜSÜ BURAYA]</strong>
+  <img src="https://github.com/MertBal-Dev/Present-AI/blob/main/demo.gif?raw=true" alt="Present AI Demo GIF"/>
 </p>
 
 ---
@@ -117,7 +115,7 @@ Bu proje sadece mevcut özellikleriyle sınırlı kalmayıp, aşağıdaki gibi p
 **İsmail Mert Bal**
 
 * **GitHub:** [@MertBal-Dev](https://github.com/MertBal-Dev)
-* **LinkedIn:** [LinkedIn Profiliniz](https://www.linkedin.com/in/KULLANICI_ADINIZ/)
+* **LinkedIn:** [LinkedIn Profiliniz](https://www.linkedin.com/in/mertbal-dev/)
 
 Bu projenin geliştirilme sürecinde karşılaşılan zorluklar ve çözümler hakkında daha fazla bilgi edinmek veya potansiyel iş fırsatları hakkında görüşmek için benimle iletişime geçmekten çekinmeyin.
 
