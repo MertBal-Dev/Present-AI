@@ -183,7 +183,7 @@ function SlideEditor({ slide, slideIndex, onUpdate, onDelete, dragHandleProps })
           <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 dark:text-dark-text-secondary mb-2">Düzen</label>
               <select
-                value={slide.layout || 'title-and-content'} // Eğer layout yoksa varsayılan değer ata
+                value={slide.layout || 'title-and-content'}
                 onChange={(e) => onUpdate(['slides', slideIndex, 'layout'], e.target.value)}
                 className="w-full px-4 py-2 bg-white dark:bg-dark-card border-2 border-gray-200 dark:border-dark-border rounded-xl outline-none focus:border-indigo-500 dark:focus:border-dark-primary text-gray-900 dark:text-dark-text"
               >

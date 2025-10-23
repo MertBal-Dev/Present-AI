@@ -82,9 +82,9 @@ const handlePresentationChange = useCallback((path, value) => {
       for (let i = 0; i < path.length - 1; i++) {
         const key = path[i];
 
-        // Eğer ara adım undefined ise otomatik oluştur
+        
         if (current[key] === undefined || current[key] === null) {
-          // Bir sonraki adım sayıysa (örneğin bir array index'i)
+        
           if (!isNaN(path[i + 1])) {
             current[key] = [];
           } else {
