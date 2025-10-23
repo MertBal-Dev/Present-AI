@@ -157,33 +157,93 @@ async function searchGoogleImages(query, page = 1) {
   }
 }
 
-async function searchPexelsImages(query, page = 1) {
-  if (!pexelsClient) {
-    return null;
-  }
-  const cacheKey = `pexels:${query}:${page}`;
-  if (imageCache[cacheKey]) {
-    return imageCache[cacheKey];
-  }
+async function searchWikimediaImages(query) {
+  const cacheKey = `wikimedia:${query}`;
+  if (imageCache[cacheKey]) return imageCache[cacheKey];
+
   try {
-    const response = await pexelsClient.photos.search({
-      query,
-      per_page: 1,
-      page: page,
-      orientation: 'landscape',
-      size: 'large'
-    });
-    if (response.photos && response.photos.length > 0) {
-      const imageUrl = response.photos[0].src.large2x || response.photos[0].src.large;
+    const url = `https://commons.wikimedia.org/w/rest.php/v1/search/page?q=${encodeURIComponent(query)}&limit=5`;
+    const response = await axios.get(url, { timeout: 8000 });
+
+    if (!response.data.pages || response.data.pages.length === 0) {
+      console.warn(`[Wikimedia REST] "${query}" için sonuç bulunamadı.`);
+      return null;
+    }
+
+    const pageTitles = response.data.pages.map(p => p.title);
+    console.log(`[Wikimedia REST] "${query}" için ${pageTitles.length} sonuç bulundu.`);
+
+    const fileTitle = pageTitles.find(t => t.toLowerCase().includes('file:')) || pageTitles[0];
+    const imageInfoUrl = `https://commons.wikimedia.org/w/api.php?action=query&titles=${encodeURIComponent(fileTitle)}&prop=imageinfo&iiprop=url|mime&format=json&origin=*`;
+    const imageResponse = await axios.get(imageInfoUrl, { timeout: 8000 });
+
+    const pages = imageResponse.data.query?.pages || {};
+    const imageCandidates = Object.values(pages)
+      .flatMap(p => p.imageinfo || [])
+      .filter(img => img.mime?.startsWith('image/'))
+      .map(img => img.url);
+
+    if (imageCandidates.length > 0) {
+      const imageUrl = imageCandidates[0];
       imageCache[cacheKey] = imageUrl;
       return imageUrl;
     }
+
     return null;
   } catch (error) {
-    console.error(`Pexels Görsel Arama hatası (${query}):`, error.message);
+    console.error(`[Wikimedia REST] Görsel arama hatası (${query}):`, error.message);
     return null;
   }
 }
+
+
+
+async function searchPexelsImages(query, page) {
+  const apiKey = process.env.PEXELS_API_KEY;
+  if (!apiKey) {
+    console.error("PEXELS_API_KEY tanımlı değil.");
+    return null;
+  }
+
+  const randomPage = page || Math.floor(Math.random() * 5) + 1;
+
+  const cacheKey = `pexels:${query}:${randomPage}`;
+  if (imageCache[cacheKey]) {
+    console.log(`[Cache] "${query}" için sayfa ${randomPage} önbellekten alındı.`);
+    return imageCache[cacheKey];
+  }
+
+  try {
+    const encodedQuery = encodeURIComponent(query.trim());
+    const url = `https://api.pexels.com/v1/search?query=${encodedQuery}&per_page=5&page=${randomPage}&orientation=landscape&locale=tr-TR`;
+
+    console.log(`[Pexels] "${query}" (page ${randomPage}) sorgulanıyor...`);
+    const response = await axios.get(url, {
+      headers: { Authorization: apiKey },
+      timeout: 8000,
+    });
+
+    const photos = response.data.photos;
+    if (!photos || photos.length === 0) {
+      console.warn(`[Pexels] "${query}" için sonuç yok.`);
+      return null;
+    }
+
+    const sorted = photos.sort((a, b) => (b.width * b.height) - (a.width * a.height));
+    const selected = sorted[0];
+    const imageUrl = selected.src.large2x || selected.src.large;
+
+    imageCache[cacheKey] = imageUrl;
+    console.log(`[Pexels] "${query}" için seçilen görsel (${randomPage}. sayfa): ${imageUrl}`);
+
+    return imageUrl;
+  } catch (error) {
+    console.error(`[Pexels] "${query}" için arama hatası:`, error.message);
+    return null;
+  }
+}
+
+
 
 async function validateImageQuality(imageUrl) {
   try {
@@ -221,40 +281,63 @@ app.post('/api/search-image', async (req, res) => {
 
     let imageUrl = null;
 
+    // 1️⃣ GOOGLE IMAGE SEARCH
     try {
-        console.log(`[ImageSearch] Google'da aranıyor (deneme ${page}): "${query}"`);
-        const candidateUrl = await searchGoogleImages(query, page);
-        if (candidateUrl && await validateImageQuality(candidateUrl)) {
-            imageUrl = candidateUrl;
-        }
+      console.log(`[ImageSearch] Google'da aranıyor (deneme ${page}): "${query}"`);
+      const candidateUrl = await searchGoogleImages(query, page);
+      if (candidateUrl && await validateImageQuality(candidateUrl)) {
+        imageUrl = candidateUrl;
+        console.log(`[ImageSearch] Google sonucu bulundu ✅`);
+      }
     } catch (error) {
-        if (error.message === 'Google Quota Exceeded') {
-            console.log(`[ImageSearch] Google kotası dolu, Pexels'e geçiliyor (deneme ${page}): "${query}"`);
-            const candidateUrl = await searchPexelsImages(query, page);
-            if (candidateUrl && await validateImageQuality(candidateUrl)) {
-                imageUrl = candidateUrl;
-            }
-        }
-    }
-    
-    
-    if (!imageUrl) {
-        console.log(`[ImageSearch] Google'da sonuç yok, Pexels deneniyor: "${query}"`);
-        const candidateUrl = await searchPexelsImages(query, page);
-        if (candidateUrl && await validateImageQuality(candidateUrl)) {
-            imageUrl = candidateUrl;
-        }
+      console.warn(`[ImageSearch] Google arama hatası: ${error.message}`);
+      if (error.message === 'Google Quota Exceeded') {
+        console.log(`[ImageSearch] Google kotası dolu, Wikimedia'ya geçiliyor...`);
+      } else {
+        console.log(`[ImageSearch] Google başarısız, Wikimedia deneniyor...`);
+      }
     }
 
+    // 2️⃣ WIKIMEDIA COMMONS FALLBACK
+    if (!imageUrl) {
+      console.log(`[ImageSearch] Wikimedia Commons aranıyor: "${query}"`);
+      const wikiUrl = await searchWikimediaImages(query);
+      if (wikiUrl && await validateImageQuality(wikiUrl)) {
+        imageUrl = wikiUrl;
+        console.log(`[ImageSearch] Wikimedia sonucu bulundu ✅`);
+      } else {
+        console.log(`[ImageSearch] Wikimedia'da uygun sonuç bulunamadı.`);
+      }
+    }
+
+    // 3️⃣ PEXELS FALLBACK
+    if (!imageUrl) {
+      console.log(`[ImageSearch] Pexels deneniyor: "${query}"`);
+      const pexelsUrl = await searchPexelsImages(query, page);
+      if (pexelsUrl && await validateImageQuality(pexelsUrl)) {
+        imageUrl = pexelsUrl;
+        console.log(`[ImageSearch] Pexels sonucu bulundu ✅`);
+      } else {
+        console.log(`[ImageSearch] Pexels'ta da sonuç bulunamadı ❌`);
+      }
+    }
+
+    // ✅ SONUÇ DÖNÜŞ
     if (imageUrl) {
       res.json({ imageUrl });
     } else {
-      res.status(404).json({ imageUrl: null, message: 'Kaliteli görsel bulunamadı.' });
+      res.status(404).json({
+        imageUrl: null,
+        message: 'Kaliteli görsel bulunamadı. Lütfen farklı bir konu deneyin.'
+      });
     }
+
   } catch (error) {
-    res.status(500).json({ error: "Görsel araması başarısız oldu." });
+    console.error(`[ImageSearch] Genel hata: ${error.message}`);
+    res.status(500).json({ error: 'Görsel araması başarısız oldu.' });
   }
 });
+
 
 app.post('/api/generate-content', async (req, res) => {
   let rawTextFromAI = '';
