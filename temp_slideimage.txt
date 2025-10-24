@@ -1,58 +1,60 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Code, RefreshCw } from '../common/Icons';
+﻿import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { Code, RefreshCw } from '../common/Icons'; 
 
-function SlideImage({ keywords, existingImageUrl, onImageChange }) {
-  // 1. ÇÖZÜM: State'i doğrudan 'existingImageUrl' prop'u ile başlatın.
-  // Component'in "hafızası" bu satırla sağlanır.
-  const [imageUrl, setImageUrl] = useState(existingImageUrl || null);
-
-  // 2. ÇÖZÜM: isLoading state'ini de prop'a göre ayarlayın.
-  // Eğer zaten bir görsel varsa, "yükleniyor" durumunda başlamaz.
-  const [isLoading, setIsLoading] = useState(!existingImageUrl);
-
+function SlideImage({ keywords, onImageChange }) {
+  const [imageUrl, setImageUrl] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(false);
   const [page, setPage] = useState(1);
   const [retryCount, setRetryCount] = useState(0);
-
-  const isFetching = useRef(false);
+  
+  // Kritik: Her sorgu iÃ§in sadece BÄ°R KEZ arama yap
   const fetchedQueries = useRef(new Set());
-  const prevQuery = useRef(keywords?.query);
-
+  const isFetching = useRef(false);
+  const shouldRefresh = useRef(false);
+  
   const API_BASE_URL = useMemo(() => (
     process.env.NODE_ENV === 'production'
       ? process.env.REACT_APP_API_BASE_URL
       : 'http://localhost:5001/api'
   ), []);
 
-  // Parent component'e (SlideEditor) yeni bulunan URL'i bildirin.
+  // GÃ¶rsel URL'ini parent'a gÃ¶nder (sadece deÄŸiÅŸtiÄŸinde)
   useEffect(() => {
-    if (imageUrl && imageUrl !== existingImageUrl && onImageChange) {
+    if (imageUrl && onImageChange) {
       onImageChange(imageUrl);
     }
-  }, [imageUrl, existingImageUrl, onImageChange]);
+  }, [imageUrl]); // onImageChange'i dependency'den Ã§Ä±kardÄ±k
 
-  // Ana görsel arama Effect'i
   useEffect(() => {
     const query = keywords?.query;
-
-    // 3. ÇÖZÜM: Eğer zaten bir görsel varsa veya sorgu yoksa, yeni arama YAPMA.
-    // Bu kontrol, PresentationMode'da yeniden aramayı engeller.
-    if (imageUrl || !query) {
+    
+    // Query yoksa durdur
+    if (!query) {
       setIsLoading(false);
       return;
     }
 
-    if (isFetching.current) return;
-
+    // AynÄ± query iÃ§in zaten arama yapÄ±ldÄ±ysa ve manuel yenileme yoksa durdur
     const queryKey = `${query}-${page}`;
-    if (fetchedQueries.current.has(queryKey)) return;
+    if (fetchedQueries.current.has(queryKey) && !shouldRefresh.current) {
+      console.log(`âœ… [Cache] "${query}" iÃ§in zaten arama yapÄ±lmÄ±ÅŸ, atlanÄ±yor.`);
+      return;
+    }
+
+    // Åu anda arama yapÄ±lÄ±yorsa Ã§ift arama yapma
+    if (isFetching.current) {
+      console.log(`â³ [Skip] "${query}" iÃ§in zaten arama yapÄ±lÄ±yor...`);
+      return;
+    }
 
     const fetchImage = async () => {
       isFetching.current = true;
+      shouldRefresh.current = false;
       setIsLoading(true);
       setError(false);
       
-      console.log(`🔍 [Fetch] "${query}" için görsel aranıyor (page: ${page})...`);
+      console.log(`ğŸ” [Fetch] "${query}" iÃ§in gÃ¶rsel aranÄ±yor (page: ${page})...`);
       
       try {
         const response = await fetch(`${API_BASE_URL}/search-image`, {
@@ -65,61 +67,67 @@ function SlideImage({ keywords, existingImageUrl, onImageChange }) {
           }),
         });
 
-        if (!response.ok) throw new Error('Görsel alınamadı');
+        if (!response.ok) throw new Error('Image fetch failed');
 
         const data = await response.json();
         if (data.imageUrl) {
           setImageUrl(data.imageUrl);
           fetchedQueries.current.add(queryKey);
+          console.log(`âœ… [Success] "${query}" iÃ§in gÃ¶rsel bulundu: ${data.imageUrl}`);
         } else {
           setError(true);
+          console.log(`âŒ [Error] "${query}" iÃ§in gÃ¶rsel bulunamadÄ±`);
         }
       } catch (err) {
+        console.error(`âŒ [Error] "${query}" arama hatasÄ±:`, err);
         setError(true);
       } finally {
-        isFetching.current = false;
         setIsLoading(false);
+        isFetching.current = false;
       }
     };
 
     fetchImage();
-  }, [keywords?.query, page, retryCount, API_BASE_URL, imageUrl]);
+  }, [keywords?.query, page, API_BASE_URL]);
 
-  // Sorgu metni (keywords) değiştiğinde state'leri sıfırla
-  useEffect(() => {
-    if (keywords?.query !== prevQuery.current) {
-      console.log(`🆕 [New Query] Sorgu değişti: "${prevQuery.current}" → "${keywords?.query}"`);
-      prevQuery.current = keywords?.query;
-      
-      setImageUrl(null);
-      setPage(1);
-      setRetryCount(0);
-      setError(false);
-      setIsLoading(true); // Yeni arama için yüklenme durumunu başlat
-      fetchedQueries.current.clear();
-    }
-  }, [keywords?.query]);
-
+  // Manuel yenileme butonu
   const handleRefresh = () => {
-    console.log(`🔄 [Refresh] Manuel yenileme başlatılıyor...`);
-    setIsLoading(true);
-    setImageUrl(null); // Mevcut görseli temizleyerek aramayı yeniden tetikle
+    console.log(`ğŸ”„ [Refresh] Manuel yenileme baÅŸlatÄ±lÄ±yor...`);
+    shouldRefresh.current = true;
     
-    // Retry mekanizması
     if (retryCount < 2) {
+      // AynÄ± sayfada yeniden dene
       setRetryCount(prev => prev + 1);
+      const queryKey = `${keywords?.query}-${page}`;
+      fetchedQueries.current.delete(queryKey);
+      // Force re-fetch
+      setImageUrl(null);
     } else {
+      // 3. denemede sonraki sayfaya geÃ§
       setPage(prevPage => prevPage + 1);
       setRetryCount(0);
     }
   };
+
+  // Sorgu deÄŸiÅŸtiÄŸinde sÄ±fÄ±rla
+  const prevQuery = useRef(null);
+  useEffect(() => {
+    if (keywords?.query !== prevQuery.current) {
+      console.log(`ğŸ†• [New Query] Sorgu deÄŸiÅŸti: "${prevQuery.current}" â†’ "${keywords?.query}"`);
+      prevQuery.current = keywords?.query;
+      setPage(1);
+      setRetryCount(0);
+      setError(false);
+      setImageUrl(null);
+    }
+  }, [keywords?.query]);
 
   if (isLoading) {
     return (
       <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200">
         <div className="flex flex-col items-center space-y-3">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
-          <p className="text-sm text-gray-500">Kaliteli görsel aranıyor...</p>
+          <p className="text-sm text-gray-500">Kaliteli gÃ¶rsel aranÄ±yor...</p>
         </div>
       </div>
     );
@@ -132,7 +140,7 @@ function SlideImage({ keywords, existingImageUrl, onImageChange }) {
           <div className="w-32 h-32 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center">
             <Code className="w-16 h-16 text-white" />
           </div>
-          <p className="text-gray-500 text-sm mb-4">{keywords?.query || 'Görsel bulunamadı'}</p>
+          <p className="text-gray-500 text-sm mb-4">{keywords?.query || 'GÃ¶rsel bulunamadÄ±'}</p>
           <button 
             onClick={handleRefresh}
             className="px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors inline-flex items-center gap-2"
@@ -157,13 +165,16 @@ function SlideImage({ keywords, existingImageUrl, onImageChange }) {
         <button 
           onClick={handleRefresh}
           className="p-3 bg-white/90 rounded-full text-gray-800 hover:bg-white hover:scale-110 transform transition-all shadow-lg"
-          title="Başka Görsel Bul"
+          title="BaÅŸka GÃ¶rsel Bul"
         >
           <RefreshCw className="w-6 h-6" />
         </button>
       </div>
       <div className="absolute bottom-2 right-2 bg-black/70 text-white text-xs px-3 py-1.5 rounded-md backdrop-blur-sm">
         {keywords?.query}
+      </div>
+      <div className="absolute top-2 right-2 bg-green-500/80 text-white text-xs px-2 py-1 rounded-md backdrop-blur-sm">
+        HD
       </div>
     </div>
   );

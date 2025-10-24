@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react'  
+import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { usePresentationState } from './hooks/usePresentationState'
 import { themes } from './data/themes'
-import { sampleTemplates } from './data/sampleTemplates' 
+import { sampleTemplates } from './data/sampleTemplates'
 import Navbar from './components/layout/Navbar'
 import HeroSection from './components/sections/HeroSection'
 import FeaturesSection from './components/sections/FeaturesSection'
@@ -10,14 +10,14 @@ import TemplatesSection from './components/sections/TemplatesSection'
 import CTASection from './components/sections/CTASection'
 import Footer from './components/layout/Footer'
 import Editor from './components/editor/Editor'
-import PresentationMode from './components/presentation/PresentationMode' 
-import { X, Sparkles } from './components/common/Icons' 
+import PresentationMode from './components/presentation/PresentationMode'
+import { X, Sparkles } from './components/common/Icons'
 import './styles/App.css'
 
 function App() {
   const {
     topic, setTopic,
-    presentationData, setPresentationData, 
+    presentationData, setPresentationData,
     isLoading,
     error, setError,
     aiModel, setAiModel,
@@ -27,10 +27,10 @@ function App() {
     handleDeleteSlide,
     handleAddSlide,
     handleDownload,
-    undo,        
-    redo,        
-    canUndo,    
-    canRedo,     
+    undo,
+    redo,
+    canUndo,
+    canRedo,
   } = usePresentationState()
 
   const [theme, setTheme] = useState('gradient-blue')
@@ -50,16 +50,13 @@ function App() {
     root.classList.add(themeMode);
   }, [themeMode]);
 
-  
+
   useEffect(() => {
     const handleKeyDown = (e) => {
-      
       if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
         e.preventDefault();
         undo();
       }
-      
-      
       if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
         e.preventDefault();
         redo();
@@ -106,7 +103,7 @@ function App() {
         return typeof item === 'string' ? { citation: item } : item;
       })
     }
-    setPresentationData(processedData) 
+    setPresentationData(processedData)
     setTheme(template.theme || 'gradient-blue')
     setError('')
     setShowTemplatePreview(null)
@@ -116,31 +113,43 @@ function App() {
   }
 
   if (isPresentationMode && presentationData) {
-    const slidesWithBibliography = [...presentationData.slides]
-    if (presentationData.bibliography?.length > 0) {
-      slidesWithBibliography.push({
+    let slidesForPresentation = [...(presentationData.slides || [])];
+    
+    const hasBibliographySlide = slidesForPresentation.some(s => 
+        s.title && /kaynakça|bibliography/i.test(s.title)
+    );
+
+    if (!hasBibliographySlide && presentationData.bibliography && presentationData.bibliography.length > 0) {
+      // 1. GÜNCELLEME: Sanal kaynakça slaytından görselle ilgili alanlar kaldırıldı.
+      const bibliographySlide = {
+        slideNumber: slidesForPresentation.length + 1,
         title: 'Kaynakça',
-        content: [
-          {
-            type: 'bullet_list',
-            items: presentationData.bibliography, 
-          },
-        ],
-        imageKeywords: { query: 'library books' },
-      })
+        content: [{ 
+          type: 'bullet_list', 
+          items: presentationData.bibliography 
+        }],
+        // imageKeywords ve imageUrl artık burada yok.
+      };
+      slidesForPresentation.push(bibliographySlide);
     }
+    
     return (
       <PresentationMode
-        slides={slidesWithBibliography}
+        slides={slidesForPresentation}
         theme={currentTheme}
         currentIndex={currentSlideIndex}
         onExit={() => setIsPresentationMode(false)}
         onNext={() =>
           setCurrentSlideIndex((prev) =>
-            Math.min(prev + 1, slidesWithBibliography.length - 1)
+            Math.min(prev + 1, slidesForPresentation.length - 1)
           )
         }
         onPrev={() => setCurrentSlideIndex((prev) => Math.max(prev - 1, 0))}
+        onSlideUpdate={(path, value) => {
+          if (path[0] === 'slides' && path[1] < (presentationData.slides || []).length) {
+            handlePresentationChange(path, value);
+          }
+        }}
       />
     )
   }
@@ -195,9 +204,9 @@ function App() {
             handleDragEnd={handleDragEnd}
             handleDeleteSlide={handleDeleteSlide}
             handleAddSlide={handleAddSlide}
-            undo={undo}           
-            redo={redo}           
-            canUndo={canUndo}     
+            undo={undo}
+            redo={redo}
+            canUndo={canUndo}
             canRedo={canRedo}
           />
         )}
@@ -207,7 +216,6 @@ function App() {
       
       <Footer scrollToSection={scrollToSection} />
 
-      {/* Template Preview Modalı */}
       <AnimatePresence>
         {showTemplatePreview && (
           <motion.div
@@ -281,7 +289,7 @@ function App() {
                               .map((b) =>
                                 b.type === 'paragraph'
                                   ? b.value
-                                  : `<ul>${b.items
+                                  : `<ul>${(b.items || [])
                                       ?.map((i) => `<li>${i}</li>`)
                                       .join('')}</ul>`
                               )

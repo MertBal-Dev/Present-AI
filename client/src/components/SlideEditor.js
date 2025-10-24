@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { DndContext, closestCenter } from '@dnd-kit/core';
 import { SortableContext, useSortable, arrayMove, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import SlideImage from './presentation/SlideImage';
 
 // SVG Icon Components
 const Icon = ({ children, className = "w-6 h-6" }) => (
@@ -15,7 +16,14 @@ const Plus = ({ className }) => (
   <Icon className={className}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></Icon>
 );
 const GripVertical = ({ className }) => (
-  <Icon className={className}><circle cx="9" cy="5" r="1" fill="currentColor"/><circle cx="9" cy="12" r="1" fill="currentColor"/><circle cx="9" cy="19" r="1" fill="currentColor"/><circle cx="15" cy="5" r="1" fill="currentColor"/><circle cx="15" cy="12" r="1" fill="currentColor"/><circle cx="15" cy="19" r="1" fill="currentColor"/></Icon>
+  <Icon className={className}>
+    <circle cx="9" cy="5" r="1" fill="currentColor" />
+    <circle cx="9" cy="12" r="1" fill="currentColor" />
+    <circle cx="9" cy="19" r="1" fill="currentColor" />
+    <circle cx="15" cy="5" r="1" fill="currentColor" />
+    <circle cx="15" cy="12" r="1" fill="currentColor" />
+    <circle cx="15" cy="19" r="1" fill="currentColor" />
+  </Icon>
 );
 const ChevronRight = ({ className }) => (
   <Icon className={className}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></Icon>
@@ -26,77 +34,6 @@ const ChevronLeft = ({ className }) => (
 const X = ({ className }) => (
   <Icon className={className}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></Icon>
 );
-const RefreshCw = ({ className }) => (
-  <Icon className={className}><path d="M3 12a9 9 0 0 1 9-9c2.39 0 4.68.94 6.34 2.6l-1.63 1.64A6.94 6.94 0 0 0 12 5a7 7 0 1 0 4.24 12.24"/><path d="M21 7v5h-5"/></Icon>
-);
-
-export function SlideImage({ keywords }) {
-  const [imageUrl, setImageUrl] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [page, setPage] = useState(1);
-
-  const handleShuffle = () => {
-    setPage(prevPage => prevPage + 1);
-  };
-
-  useEffect(() => {
-    if (!keywords || !keywords.query) {
-      setImageUrl('');
-      return;
-    }
-
-    const fetchImage = async () => {
-      setLoading(true);
-      setError('');
-      setImageUrl('');
-      
-      const query = `${keywords.query} ${keywords.style || ''}`.trim();
-
-      try {
-        const response = await fetch('http://localhost:5001/api/search-image', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query, page }),
-        });
-        
-        if (!response.ok) throw new Error('Görsel arama başarısız oldu.');
-        
-        const data = await response.json();
-        if (data.imageUrl) {
-          setImageUrl(data.imageUrl);
-        } else {
-          if (page > 1) setPage(1);
-          setImageUrl('');
-        }
-      } catch (err) {
-        setError('Görsel yüklenemedi.');
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    const debounceFetch = setTimeout(() => {
-      fetchImage();
-    }, 500);
-
-    return () => clearTimeout(debounceFetch);
-  }, [keywords, page]);
-
-  if (loading) return <div className="w-full h-full bg-gray-200 dark:bg-dark-border rounded-lg flex items-center justify-center text-gray-500 dark:text-dark-text-secondary animate-pulse">Görsel aranıyor...</div>;
-  if (error) return <div className="w-full h-full bg-red-100 text-red-600 rounded-lg flex items-center justify-center p-4 text-center">Görsel yüklenemedi.</div>;
-  if (!imageUrl) return <div className="w-full h-full bg-gray-100 dark:bg-dark-bg border-2 border-dashed border-gray-300 dark:border-dark-border rounded-lg flex items-center justify-center text-gray-500 dark:text-dark-text-secondary text-center p-4">Görsel bulunamadı.</div>;
-
-  return (
-    <div className="relative group w-full h-full">
-      <img src={imageUrl} alt={keywords.query} className="w-full h-full object-cover" />
-      <button onClick={handleShuffle} className="absolute top-2 right-2 bg-black/50 text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-300 hover:bg-black/70">
-        <RefreshCw className="w-4 h-4" />
-      </button>
-    </div>
-  );
-}
 
 function SortableContentItem({ id, item, onUpdate, onRemove }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id });
@@ -112,7 +49,6 @@ function SortableContentItem({ id, item, onUpdate, onRemove }) {
       style={style}
       className="flex items-center justify-between flex-wrap sm:flex-nowrap gap-3 mb-2 bg-white dark:bg-dark-bg rounded-lg p-3 shadow-sm border border-gray-200 dark:border-dark-border"
     >
-      {/* Tutamaç + Metin Alanı */}
       <div className="flex items-center gap-2 flex-1 min-w-0">
         <button
           {...attributes}
@@ -127,14 +63,10 @@ function SortableContentItem({ id, item, onUpdate, onRemove }) {
           value={item}
           onChange={onUpdate}
           className="flex-1 min-w-0 bg-transparent px-3 py-2 border-none outline-none focus:ring-2 focus:ring-blue-300 dark:focus:ring-dark-primary rounded-md text-gray-900 dark:text-dark-text text-sm sm:text-base break-words overflow-hidden"
-          style={{
-            wordWrap: 'break-word',
-            overflowWrap: 'break-word',
-          }}
+          style={{ wordWrap: 'break-word', overflowWrap: 'break-word' }}
         />
       </div>
 
-      {/* Silme Butonu */}
       <button
         onClick={onRemove}
         className="p-2 text-red-500 hover:bg-red-100 dark:hover:bg-red-500/10 rounded-lg transition flex-shrink-0 sm:self-auto self-start"
@@ -144,8 +76,6 @@ function SortableContentItem({ id, item, onUpdate, onRemove }) {
     </div>
   );
 }
-
-
 
 function SlideEditor({ slide, slideIndex, onUpdate, onDelete, dragHandleProps }) {
   const [isExpanded, setIsExpanded] = useState(true);
@@ -166,7 +96,9 @@ function SlideEditor({ slide, slideIndex, onUpdate, onDelete, dragHandleProps })
               placeholder="Slayt başlığı..."
             />
           </div>
-          <div className="text-sm text-gray-500 dark:text-dark-text-secondary font-medium bg-gray-200 dark:bg-gray-700 px-2 py-1 rounded-md">Slayt {slide.slideNumber}</div>
+          <div className="text-sm text-gray-500 dark:text-dark-text-secondary font-medium bg-gray-200 dark:bg-gray-700 px-2 py-1 rounded-md">
+            Slayt {slide.slideNumber}
+          </div>
         </div>
         <div className="flex items-center space-x-2">
           <button onClick={() => setIsExpanded(!isExpanded)} className="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition">
@@ -181,71 +113,72 @@ function SlideEditor({ slide, slideIndex, onUpdate, onDelete, dragHandleProps })
       {isExpanded && (
         <div className="p-6">
           <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 dark:text-dark-text-secondary mb-2">Düzen</label>
-              <select
-                value={slide.layout || 'title-and-content'}
-                onChange={(e) => onUpdate(['slides', slideIndex, 'layout'], e.target.value)}
-                className="w-full px-4 py-2 bg-white dark:bg-dark-card border-2 border-gray-200 dark:border-dark-border rounded-xl outline-none focus:border-indigo-500 dark:focus:border-dark-primary text-gray-900 dark:text-dark-text"
-              >
-                <option value="title-and-content">Başlık ve İçerik</option>
-                <option value="title-only">Sadece Başlık</option>
-              </select>
-            </div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-dark-text-secondary mb-2">Düzen</label>
+            <select
+              value={slide.layout || 'title-and-content'}
+              onChange={(e) => onUpdate(['slides', slideIndex, 'layout'], e.target.value)}
+              className="w-full px-4 py-2 bg-white dark:bg-dark-card border-2 border-gray-200 dark:border-dark-border rounded-xl outline-none focus:border-indigo-500 dark:focus:border-dark-primary text-gray-900 dark:text-dark-text"
+            >
+              <option value="title-and-content">Başlık ve İçerik</option>
+              <option value="title-only">Sadece Başlık</option>
+            </select>
+          </div>
 
           <div className="flex flex-col md:flex-row gap-6">
             <div className="flex-1 space-y-4">
-              {/* --- ANA DÜZELTME BURADA --- */}
-              {/* Koşul, layout tanımsızsa da içeriği gösterecek şekilde güncellendi */}
               {(slide.layout === 'title-and-content' || !slide.layout) && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-dark-text-secondary mb-2">İçerik Blokları</label>
                   <div className="space-y-4">
                     {slide.content?.map((block, blockIdx) => {
-                        if (block.type === 'paragraph') {
-                            return (
-                                <div key={blockIdx} className="bg-gray-50 dark:bg-dark-bg/50 p-4 rounded-xl">
-                                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Paragraf</label>
-                                    <textarea
-                                        value={block.value.replace(/<[^>]*>/g, '')}
-                                        onChange={(e) => onUpdate(['slides', slideIndex, 'content', blockIdx, 'value'], `<p>${e.target.value}</p>`)}
-                                        className="w-full bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text px-3 py-2 border-2 border-gray-200 dark:border-dark-border rounded-lg outline-none focus:border-indigo-500 dark:focus:border-dark-primary resize-y"
-                                        rows="4"
-                                    />
-                                </div>
-                            );
-                        }
-                        
-                        if (block.type === 'bullet_list') {
-                            const handleContentDragEnd = (event) => {
-                                const { active, over } = event;
-                                if (active.id !== over.id) {
-                                    const oldIndex = active.id;
-                                    const newIndex = over.id;
-                                    const reorderedItems = arrayMove(block.items, oldIndex, newIndex);
-                                    onUpdate(['slides', slideIndex, 'content', blockIdx, 'items'], reorderedItems);
-                                }
-                            };
-                            return (
-                                <div key={blockIdx} className="bg-gray-50 dark:bg-dark-bg/50 p-4 rounded-xl">
-                                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">Madde Listesi</label>
-                                    <DndContext collisionDetection={closestCenter} onDragEnd={handleContentDragEnd}>
-                                        <SortableContext items={block.items.map((_, i) => i)} strategy={verticalListSortingStrategy}>
-                                        {block.items?.map((item, itemIdx) => (
-                                            <SortableContentItem
-                                                key={itemIdx} id={itemIdx} item={item.replace(/<[^>]*>/g, '')}
-                                                onUpdate={(e) => onUpdate(['slides', slideIndex, 'content', blockIdx, 'items', itemIdx], e.target.value)}
-                                                onRemove={() => onUpdate(['slides', slideIndex, 'content', blockIdx, 'items'], block.items.filter((_, i) => i !== itemIdx))}
-                                            />
-                                        ))}
-                                        </SortableContext>
-                                    </DndContext>
-                                    <button onClick={() => onUpdate(['slides', slideIndex, 'content', blockIdx, 'items'], [...(block.items || []), 'Yeni madde'])} className="text-sm text-blue-600 dark:text-dark-secondary hover:text-blue-700 dark:hover:text-white font-medium flex items-center space-x-1 mt-3">
-                                        <Plus className="w-4 h-4" /><span>Madde Ekle</span>
-                                    </button>
-                                </div>
-                            );
-                        }
-                        return null;
+                      if (block.type === 'paragraph') {
+                        return (
+                          <div key={blockIdx} className="bg-gray-50 dark:bg-dark-bg/50 p-4 rounded-xl">
+                            <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Paragraf</label>
+                            <textarea
+                              value={block.value.replace(/<[^>]*>/g, '')}
+                              onChange={(e) => onUpdate(['slides', slideIndex, 'content', blockIdx, 'value'], `<p>${e.target.value}</p>`)}
+                              className="w-full bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text px-3 py-2 border-2 border-gray-200 dark:border-dark-border rounded-lg outline-none focus:border-indigo-500 dark:focus:border-dark-primary resize-y"
+                              rows="4"
+                            />
+                          </div>
+                        );
+                      }
+
+                      if (block.type === 'bullet_list') {
+                        const handleContentDragEnd = (event) => {
+                          const { active, over } = event;
+                          if (active.id !== over.id) {
+                            const reorderedItems = arrayMove(block.items, active.id, over.id);
+                            onUpdate(['slides', slideIndex, 'content', blockIdx, 'items'], reorderedItems);
+                          }
+                        };
+                        return (
+                          <div key={blockIdx} className="bg-gray-50 dark:bg-dark-bg/50 p-4 rounded-xl">
+                            <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">Madde Listesi</label>
+                            <DndContext collisionDetection={closestCenter} onDragEnd={handleContentDragEnd}>
+                              <SortableContext items={block.items.map((_, i) => i)} strategy={verticalListSortingStrategy}>
+                                {block.items?.map((item, itemIdx) => (
+                                  <SortableContentItem
+                                    key={itemIdx}
+                                    id={itemIdx}
+                                    item={item.replace(/<[^>]*>/g, '')}
+                                    onUpdate={(e) => onUpdate(['slides', slideIndex, 'content', blockIdx, 'items', itemIdx], e.target.value)}
+                                    onRemove={() => onUpdate(['slides', slideIndex, 'content', blockIdx, 'items'], block.items.filter((_, i) => i !== itemIdx))}
+                                  />
+                                ))}
+                              </SortableContext>
+                            </DndContext>
+                            <button
+                              onClick={() => onUpdate(['slides', slideIndex, 'content', blockIdx, 'items'], [...(block.items || []), 'Yeni madde'])}
+                              className="text-sm text-blue-600 dark:text-dark-secondary hover:text-blue-700 dark:hover:text-white font-medium flex items-center space-x-1 mt-3"
+                            >
+                              <Plus className="w-4 h-4" /><span>Madde Ekle</span>
+                            </button>
+                          </div>
+                        );
+                      }
+                      return null;
                     })}
                   </div>
                 </div>
@@ -265,9 +198,19 @@ function SlideEditor({ slide, slideIndex, onUpdate, onDelete, dragHandleProps })
               <label className="block text-sm font-medium text-gray-700 dark:text-dark-text-secondary mb-2">Görsel</label>
               <div className="space-y-2">
                 <div className="w-full h-40 bg-gray-200 dark:bg-dark-bg rounded-lg overflow-hidden">
-                  <SlideImage keywords={slide.imageKeywords} />
+                  <SlideImage
+                    keywords={slide.imageKeywords}
+                    existingImageUrl={slide.imageUrl}
+                    onImageChange={(newUrl) => onUpdate(['slides', slideIndex, 'imageUrl'], newUrl)}
+                  />
                 </div>
-                <input type="text" placeholder="Görsel konusu..." value={slide.imageKeywords?.query || ''} onChange={(e) => onUpdate(['slides', slideIndex, 'imageKeywords', 'query'], e.target.value)} className="w-full bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text px-3 py-2 border-2 border-gray-200 dark:border-dark-border rounded-lg outline-none focus:border-indigo-500 dark:focus:border-dark-primary" />
+                <input
+                  type="text"
+                  placeholder="Görsel konusu..."
+                  value={slide.imageKeywords?.query || ''}
+                  onChange={(e) => onUpdate(['slides', slideIndex, 'imageKeywords', 'query'], e.target.value)}
+                  className="w-full bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text px-3 py-2 border-2 border-gray-200 dark:border-dark-border rounded-lg outline-none focus:border-indigo-500 dark:focus:border-dark-primary"
+                />
               </div>
             </div>
           </div>
