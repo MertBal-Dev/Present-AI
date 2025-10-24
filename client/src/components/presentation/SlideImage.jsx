@@ -2,12 +2,8 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Code, RefreshCw } from '../common/Icons';
 
 function SlideImage({ keywords, existingImageUrl, onImageChange }) {
-  // 1. ÇÖZÜM: State'i doğrudan 'existingImageUrl' prop'u ile başlatın.
-  // Component'in "hafızası" bu satırla sağlanır.
   const [imageUrl, setImageUrl] = useState(existingImageUrl || null);
 
-  // 2. ÇÖZÜM: isLoading state'ini de prop'a göre ayarlayın.
-  // Eğer zaten bir görsel varsa, "yükleniyor" durumunda başlamaz.
   const [isLoading, setIsLoading] = useState(!existingImageUrl);
 
   const [error, setError] = useState(false);
@@ -24,19 +20,15 @@ function SlideImage({ keywords, existingImageUrl, onImageChange }) {
       : 'http://localhost:5001/api'
   ), []);
 
-  // Parent component'e (SlideEditor) yeni bulunan URL'i bildirin.
   useEffect(() => {
     if (imageUrl && imageUrl !== existingImageUrl && onImageChange) {
       onImageChange(imageUrl);
     }
   }, [imageUrl, existingImageUrl, onImageChange]);
 
-  // Ana görsel arama Effect'i
   useEffect(() => {
     const query = keywords?.query;
 
-    // 3. ÇÖZÜM: Eğer zaten bir görsel varsa veya sorgu yoksa, yeni arama YAPMA.
-    // Bu kontrol, PresentationMode'da yeniden aramayı engeller.
     if (imageUrl || !query) {
       setIsLoading(false);
       return;
@@ -85,7 +77,6 @@ function SlideImage({ keywords, existingImageUrl, onImageChange }) {
     fetchImage();
   }, [keywords?.query, page, retryCount, API_BASE_URL, imageUrl]);
 
-  // Sorgu metni (keywords) değiştiğinde state'leri sıfırla
   useEffect(() => {
     if (keywords?.query !== prevQuery.current) {
       console.log(`🆕 [New Query] Sorgu değişti: "${prevQuery.current}" → "${keywords?.query}"`);
@@ -95,7 +86,7 @@ function SlideImage({ keywords, existingImageUrl, onImageChange }) {
       setPage(1);
       setRetryCount(0);
       setError(false);
-      setIsLoading(true); // Yeni arama için yüklenme durumunu başlat
+      setIsLoading(true); 
       fetchedQueries.current.clear();
     }
   }, [keywords?.query]);
@@ -103,9 +94,9 @@ function SlideImage({ keywords, existingImageUrl, onImageChange }) {
   const handleRefresh = () => {
     console.log(`🔄 [Refresh] Manuel yenileme başlatılıyor...`);
     setIsLoading(true);
-    setImageUrl(null); // Mevcut görseli temizleyerek aramayı yeniden tetikle
+    setImageUrl(null); 
     
-    // Retry mekanizması
+    
     if (retryCount < 2) {
       setRetryCount(prev => prev + 1);
     } else {

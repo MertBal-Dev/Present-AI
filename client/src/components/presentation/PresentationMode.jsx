@@ -34,7 +34,6 @@ function PresentationMode({ slides, theme, currentIndex, onExit, onNext, onPrev,
     exit: { opacity: 0, x: -100, scale: 0.95 },
   };
 
-  // 2. GÜNCELLEME: Slaytın kaynakça olup olmadığını kontrol eden değişken
   const isBibliographySlide = currentSlide.title && /kaynakça|bibliography/i.test(currentSlide.title);
 
   return (
@@ -105,7 +104,6 @@ function PresentationMode({ slides, theme, currentIndex, onExit, onNext, onPrev,
             {/* 3. GÜNCELLEME: Koşullu render etme mantığı */}
             <div className="flex-grow overflow-hidden relative z-10">
               {isBibliographySlide ? (
-                // EĞER KAYNAKÇA İSE: Tam ekran metin düzeni
                 <div className="flex flex-col h-full">
                   <div className="mb-6 flex-shrink-0">
                     <h1 className="text-2xl lg:text-3xl xl:text-4xl font-bold" style={{ color: theme.primary }}>
@@ -128,7 +126,6 @@ function PresentationMode({ slides, theme, currentIndex, onExit, onNext, onPrev,
                   </div>
                 </div>
               ) : (
-                // EĞER NORMAL SLAYT İSE: Standart iki sütunlu düzen
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-10 h-full">
                   {/* Sol Taraf - İçerik */}
                   <div className="flex flex-col h-full min-h-0">

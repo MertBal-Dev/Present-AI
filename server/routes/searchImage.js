@@ -25,7 +25,6 @@ const simplifiedQueries = buildSimplifiedQueries(query);
 
     for (let i = 0; i < simplifiedQueries.length; i++) {
       const q = simplifiedQueries[i].trim();
-      // Önemli: Boş sorguları atla
       if (!q) continue;
       
       console.log(`[ImageSearch] Wikimedia (${i + 1}. deneme): "${q}"`);

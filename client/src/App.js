@@ -114,25 +114,23 @@ function App() {
 
   if (isPresentationMode && presentationData) {
     let slidesForPresentation = [...(presentationData.slides || [])];
-    
-    const hasBibliographySlide = slidesForPresentation.some(s => 
-        s.title && /kaynakça|bibliography/i.test(s.title)
+
+    const hasBibliographySlide = slidesForPresentation.some(s =>
+      s.title && /kaynakça|bibliography/i.test(s.title)
     );
 
     if (!hasBibliographySlide && presentationData.bibliography && presentationData.bibliography.length > 0) {
-      // 1. GÜNCELLEME: Sanal kaynakça slaytından görselle ilgili alanlar kaldırıldı.
       const bibliographySlide = {
         slideNumber: slidesForPresentation.length + 1,
         title: 'Kaynakça',
-        content: [{ 
-          type: 'bullet_list', 
-          items: presentationData.bibliography 
+        content: [{
+          type: 'bullet_list',
+          items: presentationData.bibliography
         }],
-        // imageKeywords ve imageUrl artık burada yok.
       };
       slidesForPresentation.push(bibliographySlide);
     }
-    
+
     return (
       <PresentationMode
         slides={slidesForPresentation}
@@ -210,10 +208,10 @@ function App() {
             canRedo={canRedo}
           />
         )}
-        
+
         <CTASection scrollToSection={scrollToSection} />
       </main>
-      
+
       <Footer scrollToSection={scrollToSection} />
 
       <AnimatePresence>
@@ -290,8 +288,8 @@ function App() {
                                 b.type === 'paragraph'
                                   ? b.value
                                   : `<ul>${(b.items || [])
-                                      ?.map((i) => `<li>${i}</li>`)
-                                      .join('')}</ul>`
+                                    ?.map((i) => `<li>${i}</li>`)
+                                    .join('')}</ul>`
                               )
                               .join(''),
                           }}
