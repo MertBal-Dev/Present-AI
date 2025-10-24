@@ -1,236 +1,359 @@
 const axios = require('axios');
 
+const imageCache = new Map();
 
-const imageCache = {};
+/* ===================== BASIT QUERY OPTIMIZATION ===================== */
 
-function diversifyQuery(original) {
-  const base = original.trim();
-  const variants = [
-    base,
-    `${base} photo`,
-    `${base} hd image`,
-    `${base} realistic`,
-    `${base} landscape`,
-    `${base} scene`,
-    `${base} high quality`,
-    `${base} wallpaper`
-  ];
-  return variants[Math.floor(Math.random() * variants.length)];
+/**
+ * AI olmadan basit query iyileştirme
+ */
+function enhanceSearchQuery(originalQuery) {
+  const words = originalQuery.trim().split(/\s+/);
+  
+  return {
+    primary: originalQuery,
+    fallback: words.length > 3 ? words.slice(0, -1).join(' ') : originalQuery,
+    generic: words.length > 2 ? words.slice(0, 2).join(' ') : originalQuery,
+    english: originalQuery 
+  };
 }
 
-function buildSimplifiedQueries(original) {
-  const q = String((original || '').trim()).replace(/\s+/g, ' ');
-  if (!q) return [];
-  const list = [q];
-  const words = q.split(' ');
-  if (words.length >= 3) {
-    list.push(words.slice(0, Math.max(2, words.length - 2)).join(' '));
+function diversifyQuery(query, searchEngine = 'wikimedia') {
+  const clean = query.trim();
+  
+  switch (searchEngine) {
+    case 'google':
+      return `${clean} photo`;
+    case 'wikimedia':
+      return clean;
+    case 'pexels':
+      return clean;
+    default:
+      return clean;
   }
-  if (words.length >= 2) {
-    list.push(words.slice(0, 2).join(' '));
-  }
-  return Array.from(new Set(list.map(s => s.trim()).filter(Boolean)));
 }
 
-async function searchGoogleImages(query, page = 1, nonce = '') {
-  query = diversifyQuery(query); 
-  if (!process.env.GOOGLE_API_KEY || !process.env.GOOGLE_CX_ID) {
-    console.log('Google API anahtarları yapılandırılmamamış, bu kaynak atlanıyor.');
-    return null;
-  }
+/* ===================== IMAGE QUALITY VALIDATION ===================== */
 
-  const cacheKey = `google:${query}:${page}:${nonce}`;
-  if (!nonce && imageCache[cacheKey]) {
-    return imageCache[cacheKey];
-  }
-
+async function validateImageQuality(url, minSize = 100000) {
   try {
-    const startIndex = (page - 1) * 1 + 1;
-    const response = await axios.get('https://www.googleapis.com/customsearch/v1', {
-      params: {
-        key: process.env.GOOGLE_API_KEY,
-        cx: process.env.GOOGLE_CX_ID,
-        q: query,
-        searchType: 'image',
-        num: 1,
-        start: startIndex,
-        imgSize: 'large',
-        imgType: 'photo',
-        fileType: 'jpg,png',
-        safe: 'active',
-        rights: 'cc_publicdomain,cc_attribute,cc_sharealike',
-        _t: Date.now() 
-      }
-    });
-    if (response.data.items && response.data.items.length > 0) {
-      const imageUrl = response.data.items[0].link;
-      if (await validateImageQuality(imageUrl)) { 
-        imageCache[cacheKey] = imageUrl;
-        return imageUrl;
-      }
-    }
-    return null;
-  } catch (error) {
-    const errorMessage = error.response?.data?.error?.message || error.message;
-    console.error(`Google Görsel Arama hatası (${query}):`, errorMessage);
-    if (errorMessage.includes('Quota exceeded')) {
-      throw new Error('Google Quota Exceeded');
-    }
-    return null;
-  }
-}
-
-async function searchWikimediaImages(query, nonce = '') {
-  query = diversifyQuery(query); 
-  const cacheKey = `wikimedia:${query}:${nonce}`;
-  if (!nonce && imageCache[cacheKey]) return imageCache[cacheKey];
-
-  try {
-    console.log(`[Wikimedia AI] "${query}" için gelişmiş akıllı arama başlatılıyor...`);
-
     
-    const searchUrl = `https://commons.wikimedia.org/w/rest.php/v1/search/page?q=${encodeURIComponent(query)}&limit=30&_=${Date.now()}`;
-    const searchRes = await axios.get(searchUrl, { timeout: 10000 });
-    const pages = searchRes.data?.pages || [];
-
-    if (pages.length === 0) {
-      console.warn(`[Wikimedia AI] "${query}" için sonuç bulunamadı.`);
-      return null;
+    if (url.startsWith('x-raw-image://')) {
+      return false;
     }
-
-    const imageCandidates = [];
-
-    for (const p of pages.slice(0, 20)) {
-      const title = p.title.toLowerCase().startsWith('file:') ? p.title : `File:${p.title}`;
-
-      const infoUrl = `https://commons.wikimedia.org/w/api.php?action=query&titles=${encodeURIComponent(title)}&prop=imageinfo|pageterms|info&iiprop=url|mime|size|extmetadata&format=json&origin=*`;
-      const infoRes = await axios.get(infoUrl, { timeout: 10000 });
-
-      const pageData = Object.values(infoRes.data.query?.pages || {})[0];
-      const infos = pageData?.imageinfo || [];
-      const desc = pageData?.terms?.description?.[0] || '';
-
-      for (const img of infos) {
-        if (!img.url || !img.mime?.startsWith('image/')) continue;
-        const width = img.width || img.extmetadata?.ImageWidth?.value || 0;
-        const height = img.height || img.extmetadata?.ImageHeight?.value || 0;
-        const ratio = width / (height || 1);
-        const descText = (desc + ' ' + (img.extmetadata?.ImageDescription?.value || '')).toLowerCase();
-
-        if (width < 1000 || height < 700) continue;
-        if (ratio < 0.7 || ratio > 2.2) continue;
-
-        const keywords = query.toLowerCase().split(/\s+/);
-        const matchScore = keywords.reduce((s, k) => s + (descText.includes(k) ? 1 : 0), 0);
-
-        imageCandidates.push({
-          url: img.url,
-          width,
-          height,
-          mime: img.mime,
-          ratio,
-          desc: descText,
-          score: matchScore + (width * height) / 1000000,
-        });
-      }
-    }
-
-    if (imageCandidates.length === 0) return null;
-
-    imageCandidates.sort((a, b) => b.score - a.score);
-    const top = imageCandidates.slice(0, 3);
-    const selected = top[Math.floor(Math.random() * top.length)];
-
-    if (await validateImageQuality(selected.url)) { 
-      imageCache[cacheKey] = selected.url;
-      return selected.url;
-    }
-    return null;
-  } catch (err) {
-    console.error(`[Wikimedia AI] Hata oluştu (${query}):`, err.message);
-    return null;
-  }
-}
-
-async function searchPexelsImages(query, page, nonce = '') {
-  const apiKey = process.env.PEXELS_API_KEY;
-  if (!apiKey) {
-    console.error('PEXELS_API_KEY tanımlı değil.');
-    return null;
-  }
-
-  query = diversifyQuery(query); 
-  const randomPage = page || Math.floor(Math.random() * 15) + 1;
-  const cacheKey = `pexels:${query}:${randomPage}:${nonce}`;
-
-  if (!nonce && page === 1 && imageCache[cacheKey]) {
-    console.log(`[Cache] "${query}" için sayfa ${randomPage} önbellekten alındı.`);
-    return imageCache[cacheKey];
-  }
-
-  try {
-    const encodedQuery = encodeURIComponent(query.trim());
-    const url = `https://api.pexels.com/v1/search?query=${encodedQuery}&per_page=5&page=${randomPage}&orientation=landscape&locale=en-US&_=${Date.now()}`;
-
-    console.log(`[Pexels] "${query}" (page ${randomPage}) sorgulanıyor...`);
-    const response = await axios.get(url, {
-      headers: { Authorization: apiKey },
-      timeout: 8000,
+    
+    const res = await axios.head(url, { 
+      timeout: 5000,
+      maxRedirects: 3,
+      validateStatus: (status) => status < 500
     });
-
-    const photos = response.data.photos;
-    if (!photos || photos.length === 0) return null;
-
-    const sorted = photos.sort((a, b) => (b.width * b.height) - (a.width * a.height));
-    const selected = sorted[Math.floor(Math.random() * sorted.length)];
-    const imageUrl = selected.src.large2x || selected.src.large;
-
-    if (await validateImageQuality(imageUrl)) { 
-      if (page === 1) imageCache[cacheKey] = imageUrl;
-      console.log(`[Pexels] "${query}" (${randomPage}. sayfa) görsel seçildi: ${imageUrl}`);
-      return imageUrl;
+    
+    const contentType = res.headers['content-type'] || '';
+    const contentLength = parseInt(res.headers['content-length'] || '0');
+    
+    if (!/image\/(jpeg|jpg|png|webp)/i.test(contentType)) {
+      return false;
     }
-    return null;
-  } catch (error) {
-    console.error(`[Pexels] "${query}" için arama hatası:`, error.message);
-    return null;
-  }
-}
-
-async function validateImageQuality(imageUrl) {
-  try {
-    const response = await axios.head(imageUrl, { timeout: 5000 });
-    const contentLength = parseInt(response.headers['content-length'] || '0');
-    const contentType = response.headers['content-type'] || '';
-
-    if (contentLength < 50000) return false;
-    if (!contentType.includes('image/jpeg') && !contentType.includes('image/png')) return false;
+    
+    if (contentLength > 0 && contentLength < minSize) {
+      return false;
+    }
+    
+    if (res.status >= 400) {
+      return false;
+    }
+    
     return true;
-  } catch {
+  } catch (error) {
     return false;
   }
 }
 
-async function tryWikimediaWithBackoff(query) {
-  const candidates = buildSimplifiedQueries(query);
-  for (let i = 0; i < candidates.length; i++) {
-    const q = candidates[i];
-    console.log(`[ImageSearch] Wikimedia (${i + 1}. deneme): "${q}"`);
-    const url = await searchWikimediaImages(q);
-    if (url && await validateImageQuality(url)) {
-      console.log(`[OK] Wikimedia sonucu bulundu (${i + 1}. deneme): ${url}`);
-      return url;
-    }
-    console.log(`[X] Wikimedia başarısız (${i + 1}. deneme): "${q}"`);
+/* ===================== SEARCH ENGINES ===================== */
+
+/**
+ * Google Custom Search
+ */
+async function searchGoogleImages(query, options = {}) {
+  const { page = 1, resultsCount = 5 } = options;
+  
+  if (!process.env.GOOGLE_API_KEY || !process.env.GOOGLE_CX_ID) {
+    console.warn('[Google] API keys missing');
+    return [];
   }
-  return null;
+
+  const cacheKey = `google:${query}:${page}`;
+  if (imageCache.has(cacheKey)) return imageCache.get(cacheKey);
+
+  try {
+    const startIndex = (page - 1) * 10 + 1;
+    const optimizedQuery = diversifyQuery(query, 'google');
+    
+    console.log(`[Google] Searching: "${optimizedQuery}"`);
+    
+    const res = await axios.get('https://www.googleapis.com/customsearch/v1', {
+      params: {
+        key: process.env.GOOGLE_API_KEY,
+        cx: process.env.GOOGLE_CX_ID,
+        q: optimizedQuery,
+        searchType: 'image',
+        num: Math.min(resultsCount, 10),
+        start: startIndex,
+        imgSize: 'large',
+        imgType: 'photo',
+        safe: 'active',
+        fileType: 'jpg,png'
+      },
+      timeout: 10000
+    });
+
+    const items = res.data.items || [];
+    const results = [];
+    
+    for (const item of items) {
+      const imageUrl = item?.link;
+      
+      
+      if (!imageUrl || imageUrl.startsWith('x-raw-image://')) {
+        continue;
+      }
+      
+      if (await validateImageQuality(imageUrl, 80000)) {
+        results.push({
+          url: imageUrl,
+          title: item.title,
+          source: 'google'
+        });
+      }
+    }
+    
+    console.log(`[Google] Found ${results.length} valid images`);
+    imageCache.set(cacheKey, results);
+    return results;
+
+  } catch (err) {
+    const msg = err.response?.data?.error?.message || err.message;
+    console.error(`[Google] Error: ${msg}`);
+    return [];
+  }
+}
+
+/**
+ * Wikimedia Commons
+ */
+async function searchWikimediaImages(query, options = {}) {
+  const { resultsCount = 10 } = options;
+  const cacheKey = `wiki:${query}`;
+  if (imageCache.has(cacheKey)) return imageCache.get(cacheKey);
+
+  try {
+    console.log(`[Wikimedia] Searching: "${query}"`);
+    
+    const searchUrl = `https://commons.wikimedia.org/w/rest.php/v1/search/page`;
+    const searchRes = await axios.get(searchUrl, {
+      params: {
+        q: query,
+        limit: 30
+      },
+      timeout: 10000
+    });
+    
+    const pages = searchRes.data?.pages || [];
+    if (!pages.length) {
+      console.log('[Wikimedia] No pages found');
+      return [];
+    }
+
+    const results = [];
+    
+    for (const page of pages.slice(0, resultsCount * 2)) {
+      try {
+        const title = page.title.startsWith('File:') ? page.title : `File:${page.title}`;
+        
+        const infoUrl = `https://commons.wikimedia.org/w/api.php`;
+        const infoRes = await axios.get(infoUrl, {
+          params: {
+            action: 'query',
+            titles: title,
+            prop: 'imageinfo',
+            iiprop: 'url|mime|size',
+            format: 'json',
+            origin: '*'
+          },
+          timeout: 8000
+        });
+        
+        const pageData = Object.values(infoRes.data.query.pages || {})[0];
+        const imageInfo = pageData?.imageinfo?.[0];
+        
+        if (!imageInfo?.url) continue;
+        
+        const mime = imageInfo.mime || '';
+        const width = imageInfo.width || 0;
+        const height = imageInfo.height || 0;
+        
+        if (!/image\/(jpeg|png|webp)/i.test(mime)) continue;
+        if (width < 800 || height < 600) continue;
+        
+        if (await validateImageQuality(imageInfo.url)) {
+          results.push({
+            url: imageInfo.url,
+            title: page.title,
+            source: 'wikimedia',
+            width: width,
+            height: height
+          });
+          
+          if (results.length >= resultsCount) break;
+        }
+      } catch (itemError) {
+        continue;
+      }
+    }
+    
+    console.log(`[Wikimedia] Found ${results.length} valid images`);
+    imageCache.set(cacheKey, results);
+    return results;
+
+  } catch (err) {
+    console.error(`[Wikimedia] Error: ${err.message}`);
+    return [];
+  }
+}
+
+/**
+ * Pexels API
+ */
+async function searchPexelsImages(query, options = {}) {
+  const { resultsCount = 5 } = options;
+  const apiKey = process.env.PEXELS_API_KEY;
+  if (!apiKey) return [];
+
+  const cacheKey = `pexels:${query}`;
+  if (imageCache.has(cacheKey)) return imageCache.get(cacheKey);
+
+  try {
+    console.log(`[Pexels] Searching: "${query}"`);
+    
+    const res = await axios.get(`https://api.pexels.com/v1/search`, {
+      headers: { Authorization: apiKey },
+      params: { 
+        query: query, 
+        per_page: resultsCount * 2,
+        orientation: 'landscape',
+        size: 'large'
+      },
+      timeout: 10000
+    });
+
+    const photos = res.data?.photos || [];
+    const results = [];
+    
+    for (const photo of photos) {
+      const imageUrl = photo?.src?.large2x || photo?.src?.large;
+      if (imageUrl && photo.width >= 1920 && photo.height >= 1080) {
+        if (await validateImageQuality(imageUrl)) {
+          results.push({
+            url: imageUrl,
+            title: photo.alt || 'Pexels Photo',
+            source: 'pexels',
+            photographer: photo.photographer
+          });
+          
+          if (results.length >= resultsCount) break;
+        }
+      }
+    }
+    
+    console.log(`[Pexels] Found ${results.length} valid images`);
+    imageCache.set(cacheKey, results);
+    return results;
+
+  } catch (err) {
+    console.error(`[Pexels] Error: ${err.message}`);
+    return [];
+  }
+}
+
+/* ===================== SMART IMAGE SEARCH ===================== */
+
+async function smartImageSearch(queryData) {
+  const query = typeof queryData === 'string' ? queryData : queryData.query;
+  const queryEnglish = queryData?.queryEnglish || query;
+  
+  console.log(`\n[SmartSearch] Starting: "${query}"`);
+  
+  const cacheKey = `smart:${query}`;
+  if (imageCache.has(cacheKey)) {
+    console.log('[SmartSearch] Cache hit');
+    return imageCache.get(cacheKey);
+  }
+
+  try {
+    
+    const enhanced = enhanceSearchQuery(query);
+    const searchQueries = [
+      enhanced.primary,
+      enhanced.fallback,
+      enhanced.generic
+    ];
+
+    
+    for (const q of searchQueries) {
+      const results = await searchWikimediaImages(q, { resultsCount: 3 });
+      if (results.length > 0) {
+        console.log(`[SmartSearch] ✓ Found on Wikimedia: ${results[0].url}`);
+        imageCache.set(cacheKey, results[0].url);
+        return results[0].url;
+      }
+    }
+
+    
+    if (shouldUseGoogle(query)) {
+      for (const q of [searchQueries[0], queryEnglish]) {
+        const results = await searchGoogleImages(q, { resultsCount: 3 });
+        if (results.length > 0) {
+          console.log(`[SmartSearch] ✓ Found on Google: ${results[0].url}`);
+          imageCache.set(cacheKey, results[0].url);
+          return results[0].url;
+        }
+      }
+    }
+
+    
+    const pexelsResults = await searchPexelsImages(queryEnglish, { resultsCount: 3 });
+    if (pexelsResults.length > 0) {
+      console.log(`[SmartSearch] ✓ Found on Pexels: ${pexelsResults[0].url}`);
+      imageCache.set(cacheKey, pexelsResults[0].url);
+      return pexelsResults[0].url;
+    }
+
+    console.warn(`[SmartSearch] ✗ No images found for "${query}"`);
+    return null;
+
+  } catch (error) {
+    console.error(`[SmartSearch] Fatal error:`, error.message);
+    return null;
+  }
+}
+
+function shouldUseGoogle(query) {
+  const importantKeywords = [
+    'tarih', 'tarihi', 'historical',
+    'mimari', 'architecture',
+    'bilim', 'science',
+    'müze', 'museum',
+    'antik', 'ancient'
+  ];
+  
+  const lowerQuery = query.toLowerCase();
+  return importantKeywords.some(kw => lowerQuery.includes(kw)) || Math.random() < 0.3;
 }
 
 module.exports = {
-  buildSimplifiedQueries,
-  searchGoogleImages,
+  smartImageSearch,
   searchWikimediaImages,
+  searchGoogleImages,
   searchPexelsImages,
-  validateImageQuality,
-  tryWikimediaWithBackoff,
+  validateImageQuality
 };

@@ -3,7 +3,6 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-
 const aiResponseCache = new Map();
 const CACHE_TTL_MS = 1000 * 60 * 30;
 
@@ -27,7 +26,6 @@ function getCache(topic, language) {
   return cached.data;
 }
 
-
 let lastUsedModel = null;
 function getNextModel() {
   const models = ['gemini-2.5-pro', 'gemini-2.5-flash'];
@@ -47,7 +45,6 @@ Output only a valid JSON object (no explanations, no markdown).
 Topic: "${topic}"
 Language of output: ${language}. All content, titles, image keywords, and citations must be written in ${language}.
 
-
 ---
 
 ### PROTOCOL 1 – ACADEMIC DEPTH & CITATIONS
@@ -59,11 +56,11 @@ Language of output: ${language}. All content, titles, image keywords, and citati
 ---
 
 ### PROTOCOL 2 – STRUCTURE & CONTENT QUALITY
-1. Total slides: 10–15.
+1. Total slides: 12–16.
 2. Logical flow:
    - Introduction
    - Historical Context / Background
-   - Core Analysis (2–4 slides)
+   - Core Analysis (3–5 slides)
    - Case Study / Example
    - Challenges / Counterarguments
    - Future Trends
@@ -75,15 +72,93 @@ Language of output: ${language}. All content, titles, image keywords, and citati
 
 ---
 
-### PROTOCOL 3 – VISUAL QUERY DESIGN
-1. Each slide must include: 
-   "imageKeywords": { "query": "..." }
-2. The query must be:
-   - Written in ${language}
-   - 3–6 descriptive words
-   - Depicting a photographable real-world scene
-   - Related directly to the slide content
-   - Example: GOOD: "engineer adjusting robotic arm in factory"
+### PROTOCOL 3 – VISUAL QUERY DESIGN (CRITICAL)
+You are a professional presentation design assistant. Your goal is to suggest visuals that accurately represent each slide's core idea, are aesthetically strong, and support the narrative.
+
+🔹 Essential Visual Criteria:
+
+1. **Topic Relevance**: The visual must directly relate to the slide's title and content.
+   - If scientific → real object, location, or event photo (NOT abstract art)
+   - If cultural/historical → accurate representation of the period, location, or artifact
+
+2. **Narrative Power**: Visual should complement (not repeat) the slide text and add "story"
+   - "Geological processes" → natural formation scene
+   - "Historical context" → period architecture or people
+   - "Analysis/conclusion" → summarizing symbol, map, or harmonious abstract texture
+
+3. **Composition Requirements**:
+   - Horizontal (16:9) aspect ratio preferred
+   - Main subject centered or aligned with golden ratio
+   - Clean background; avoid clutter that reduces text readability
+   - No excessive empty space or extreme close-ups
+
+4. **Color & Tone Harmony**:
+   - Soft tones matching presentation theme (avoid oversaturated, neon, or dark colors)
+   - Contrast should highlight text, not distract
+   - Natural color balance preferred (avoid over-filtered or HDR looks)
+
+5. **Style Consistency**:
+   - Maintain same style across all slides: all photos OR all illustrations
+   - Don't mix stock photos with vectors in same presentation
+   - If human figures present, same cultural/geographic context
+
+6. **License & Ethics**:
+   - Prefer public domain (CC0) or open licenses (CC BY-SA)
+   - NEVER: violence, weapons, blood, political symbols, brand logos, inappropriate objects
+   - AI-generated images only for "conceptual/abstract explanations"
+
+7. **Mental Association**:
+   - Visual should immediately convey "what it wants to tell"
+   - Reject objects that symbolize but are unrelated (e.g., rifle instead of fairy chimneys)
+   - Should spark curiosity but stay on topic
+
+8. **Language & Cultural Balance**:
+   - Even if topic is in Turkish, follow international presentation aesthetics
+   - If cultural elements present, use real places, arts, or natural structures from that country
+   - Text language and visual cultural tone must not conflict
+
+🔹 Image Query Format:
+
+Each slide MUST include: "imageKeywords": { "query": "...", "queryEnglish": "...", "context": "..." }
+
+- **query**: 4-8 descriptive words in ${language}, depicting a photographable real-world scene
+- **queryEnglish**: English translation of the query for better search results
+- **context**: Brief explanation of what the image should convey (1 sentence)
+
+Examples:
+GOOD: 
+{
+  "query": "Kapadokya peri bacaları gün batımı",
+  "queryEnglish": "Cappadocia fairy chimneys sunset landscape",
+  "context": "Shows the unique geological formations of the region"
+}
+
+BAD:
+{
+  "query": "güzel manzara",
+  "queryEnglish": "beautiful landscape",
+  "context": "Generic scene"
+}
+
+SPECIFIC REQUIREMENTS:
+- For historical topics: Include time period, location, and specific artifact/building
+- For scientific topics: Include specific phenomenon, equipment, or natural formation
+- For cultural topics: Include cultural practice, traditional object, or architectural style
+- For technical topics: Include machinery, process, or workplace setting
+
+🔹 Good Visual Checklist:
+✓ Directly related to topic
+✓ Real and high resolution
+✓ Balanced composition with text
+✓ Color harmonious
+✓ Aesthetically pleasing and license-safe
+
+🔹 Bad Visual Checklist:
+✗ Unrelated objects (e.g., rifle, animal, fashion shoot)
+✗ Over-posed stock scene
+✗ Over-filtered or cartoonish
+✗ Vertical/distorted ratio
+✗ Colors that shadow text or distract
 
 ---
 
@@ -112,7 +187,11 @@ Language of output: ${language}. All content, titles, image keywords, and citati
         ]}
       ],
       "notes": "Short presenter note",
-      "imageKeywords": {"query": "..." }
+      "imageKeywords": {
+        "query": "detailed query in ${language}",
+        "queryEnglish": "English translation for search",
+        "context": "What this image should convey"
+      }
     }
   ],
   "bibliography": [
@@ -143,7 +222,7 @@ Language of output: ${language}. All content, titles, image keywords, and citati
 
 async function visionRelevanceScore(query, imageUrl) {
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-pro' });
     const prompt = `\nRate the semantic relevance between the following image and the topic description.\nTopic: "${query}"\nImage URL: ${imageUrl}\nOutput only a number between 0 and 100 – higher means more relevant.\n`;
     const result = await model.generateContent(prompt);
     const text = result.response.text().trim();
@@ -157,20 +236,86 @@ async function visionRelevanceScore(query, imageUrl) {
 
 async function extractImageMetaKeywords(imageUrl) {
   try {
-    const response = await axios.get(imageUrl, { timeout: 5000 });
-    const html = response.data || '';
-    const metaKeywords = [];
-    const titleMatch = html.match(/<title>(.*?)<\/title>/i);
-    const metaDescMatch = html.match(/<meta[^>]*name=["']description["'][^>]*content=["']([^"']+)["'][^>]*>/i);
-    const metaKeywordMatch = html.match(/<meta[^>]*name=["']keywords["'][^>]*content=["']([^"']+)["'][^>]*>/i);
-    const altTexts = [...html.matchAll(/alt=["']([^"']+)["']/gi)].map(m => m[1]);
-    if (titleMatch) metaKeywords.push(titleMatch[1]);
-    if (metaDescMatch) metaKeywords.push(metaDescMatch[1]);
-    if (metaKeywordMatch) metaKeywords.push(metaKeywordMatch[1]);
-    if (altTexts.length) metaKeywords.push(...altTexts);
-    return metaKeywords.join(' ').replace(/[\n\r\t]+/g, ' ').trim().toLowerCase();
+    
+    let pageUrl = imageUrl;
+    
+    
+    if (imageUrl.includes('wikimedia.org') || imageUrl.includes('wikipedia.org')) {
+      
+      const fileName = imageUrl.match(/\/([^\/]+?)(?:\.[^.\/]+)?$/)?.[1];
+      if (fileName) {
+        const decodedName = decodeURIComponent(fileName);
+        
+        const keywords = decodedName
+          .replace(/[_-]/g, ' ')
+          .replace(/\d+px/g, '')
+          .replace(/\.(jpg|png|jpeg|webp|svg)/gi, '')
+          .trim();
+        
+        console.log(`[MetaExtract] Wikimedia keywords from filename: "${keywords}"`);
+        return keywords.toLowerCase();
+      }
+    }
+    
+    
+    if (imageUrl.includes('pexels.com')) {
+      
+      const photoId = imageUrl.match(/photos\/(\d+)/)?.[1];
+      if (photoId && process.env.PEXELS_API_KEY) {
+        try {
+          const res = await axios.get(`https://api.pexels.com/v1/photos/${photoId}`, {
+            headers: { Authorization: process.env.PEXELS_API_KEY },
+            timeout: 5000
+          });
+          const alt = res.data?.alt || '';
+          console.log(`[MetaExtract] Pexels alt text: "${alt}"`);
+          return alt.toLowerCase();
+        } catch (err) {
+          console.warn(`[MetaExtract] Pexels API failed: ${err.message}`);
+        }
+      }
+    }
+    
+    
+    try {
+      const headRes = await axios.head(imageUrl, { 
+        timeout: 3000,
+        maxRedirects: 3
+      });
+      
+      
+      const contentDisposition = headRes.headers['content-disposition'];
+      if (contentDisposition) {
+        const fileNameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+        if (fileNameMatch && fileNameMatch[1]) {
+          const fileName = fileNameMatch[1].replace(/['"]/g, '');
+          const keywords = fileName
+            .replace(/[_-]/g, ' ')
+            .replace(/\.(jpg|png|jpeg|webp|svg)/gi, '')
+            .trim();
+          console.log(`[MetaExtract] Keywords from Content-Disposition: "${keywords}"`);
+          return keywords.toLowerCase();
+        }
+      }
+    } catch (err) {
+      console.warn(`[MetaExtract] HEAD request failed: ${err.message}`);
+    }
+    
+    
+    const urlPath = new URL(imageUrl).pathname;
+    const pathKeywords = urlPath
+      .split('/')
+      .pop()
+      ?.replace(/[_-]/g, ' ')
+      .replace(/\.(jpg|png|jpeg|webp|svg)/gi, '')
+      .replace(/\d+/g, '')
+      .trim() || '';
+    
+    console.log(`[MetaExtract] Keywords from URL path: "${pathKeywords}"`);
+    return pathKeywords.toLowerCase();
+    
   } catch (error) {
-    console.warn(`[MetaExtract] Meta veriler alınamadı (${imageUrl}):`, error.message);
+    console.warn(`[MetaExtract] Failed to extract metadata from ${imageUrl}:`, error.message);
     return '';
   }
 }
@@ -178,7 +323,7 @@ async function extractImageMetaKeywords(imageUrl) {
 async function computeKeywordSimilarityScore(query, metaText) {
   if (!query || !metaText) return 0;
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-pro' });
     const prompt = `\nCompare semantic similarity between two descriptions:\nA) "${query}"\nB) "${metaText}"\nReturn only a single integer (0–100) indicating how similar they are.\n`;
     const result = await model.generateContent(prompt);
     const text = result.response.text().trim();
@@ -241,7 +386,6 @@ function autoRankSlides(presentationData) {
 }
 
 module.exports = {
-
   getCache,
   setCache,
   generatePresentation,
@@ -252,4 +396,3 @@ module.exports = {
   validateBibliographyURLs,
   autoRankSlides,
 };
-
