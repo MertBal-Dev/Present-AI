@@ -67,7 +67,8 @@ function SlideEditor({ slide, slideIndex, onUpdate, onDelete, dragHandleProps })
       const formData = new FormData();
       formData.append('slideImage', file);
 
-      const API_URL = `${process.env.REACT_APP_API_BASE_URL || 'http://localhost:5001'}/api/upload-image`;
+      const API_URL = `${process.env.REACT_APP_API_BASE_URL || 'http://localhost:5001'}/upload-image`;
+
 
 
 
