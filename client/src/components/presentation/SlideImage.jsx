@@ -76,11 +76,13 @@ function SlideImage({ keywords, existingImageUrl, onImageChange }) {
   }, []);
 
 
-  useEffect(() => {
-    if (existingImageUrl && existingImageUrl !== imageUrl) {
-      setImageUrl(existingImageUrl);
-    }
-  }, [existingImageUrl]);
+useEffect(() => {
+  if (existingImageUrl) {
+    setImageUrl(existingImageUrl);
+    setError(false);
+  }
+}, [existingImageUrl]);
+
 
 
   useEffect(() => {

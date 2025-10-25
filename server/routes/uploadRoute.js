@@ -12,8 +12,8 @@ const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     const uploadPath = path.join(__dirname, '..', 'public', 'uploads');
     console.log('[Upload] Upload path:', uploadPath);
-    
-    
+
+
     if (!fs.existsSync(uploadPath)) {
       fs.mkdirSync(uploadPath, { recursive: true });
       console.log('[Upload] Uploads klasörü oluşturuldu');
@@ -38,10 +38,10 @@ const fileFilter = (req, file, cb) => {
   }
 };
 
-const upload = multer({ 
+const upload = multer({
   storage: storage,
   fileFilter: fileFilter,
-  limits: { fileSize: 1024 * 1024 * 5 } 
+  limits: { fileSize: 1024 * 1024 * 5 }
 });
 
 
@@ -58,17 +58,21 @@ router.post('/upload-image', (req, res, next) => {
 }, upload.single('slideImage'), (req, res) => {
   console.log('[Upload] Middleware geçildi');
   console.log('[Upload] File:', req.file);
-  
+
   if (!req.file) {
     console.log('[Upload] ✗ Dosya yüklenmedi');
     return res.status(400).json({ error: 'Dosya yüklenmedi veya dosya tipi uygun değil.' });
   }
 
-  
-  const imageUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
-  
+
+  const isLocalhost = req.get('host').includes('localhost');
+  const protocol = isLocalhost ? 'http' : 'https';
+  const imageUrl = `${protocol}://${req.get('host')}/uploads/${req.file.filename}`;
+
+
+
   console.log(`[Upload] ✓ Görsel yüklendi: ${imageUrl}`);
-  res.json({ 
+  res.json({
     success: true,
     imageUrl: imageUrl,
     filename: req.file.filename
