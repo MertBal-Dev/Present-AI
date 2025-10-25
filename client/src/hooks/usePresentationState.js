@@ -8,6 +8,7 @@ export const usePresentationState = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [aiModel, setAiModel] = useState('gemini-2.5-pro');
+  const [isDownloading, setIsDownloading] = useState(false);
 
   const [history, setHistory] = useState([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
@@ -30,11 +31,12 @@ export const usePresentationState = () => {
 
   const updateStateAndHistory = useCallback((newData) => {
     
+    
+    
+    const clonedData = JSON.parse(JSON.stringify(newData));
+    
     const newHistory = history.slice(0, historyIndex + 1);
-    
-    
-    newHistory.push(JSON.parse(JSON.stringify(newData))); 
-    
+    newHistory.push(clonedData);
     
     const limitedHistory = newHistory.length > 150 
       ? newHistory.slice(-150) 
@@ -43,6 +45,8 @@ export const usePresentationState = () => {
     setHistory(limitedHistory);
     setHistoryIndex(limitedHistory.length - 1);
     setPresentationData(newData);
+    
+    
   }, [history, historyIndex]);
 
   const handleGeneratePresentation = async () => {
@@ -56,12 +60,20 @@ export const usePresentationState = () => {
     try {
       const data = await api.generateContent(topic, aiModel);
       
+      
+      if (data.slides) {
+        data.slides = data.slides.map(slide => ({
+          ...slide,
+          imageUrl: slide.imageUrl || null, 
+        }));
+      }
+      
       const initialData = JSON.parse(JSON.stringify(data));
       setHistory([initialData]);
       setHistoryIndex(0);
       setPresentationData(data);
     } catch (error) {
-      console.error("Sunum oluşturulurken bir hata oluştu:", error);
+      
       setError(`Sunum oluşturulamadı: ${error.message}`);
     } finally {
       setIsLoading(false);
@@ -71,47 +83,58 @@ export const usePresentationState = () => {
     }
   };
 
-const handlePresentationChange = useCallback((path, value) => {
-  const applyChange = (data) => {
-    if (!data) return null;
-
-    const newData = JSON.parse(JSON.stringify(data));
-    let current = newData;
-
-    try {
-      for (let i = 0; i < path.length - 1; i++) {
-        const key = path[i];
-
+  
+  const handlePresentationChange = useCallback((path, value) => {
+    
+    
+    setPresentationData(prevData => {
+      if (!prevData) {
         
-        if (current[key] === undefined || current[key] === null) {
-        
-          if (!isNaN(path[i + 1])) {
-            current[key] = [];
-          } else {
-            current[key] = {};
-          }
-        }
-
-        current = current[key];
+        return null;
       }
 
-      const lastKey = path[path.length - 1];
-      current[lastKey] = value;
+      
+      const newData = JSON.parse(JSON.stringify(prevData));
+      let current = newData;
 
-      return newData;
-    } catch (error) {
-      console.error("⚠️ applyChange hatası:", error.message, "Path:", path, "Value:", value);
-      alert("Bir hata oluştu. Bu alan şu anda düzenlenemiyor.");
-      return null;
-    }
-  };
+      try {
+        
+        for (let i = 0; i < path.length - 1; i++) {
+          const key = path[i];
 
-  const newData = applyChange(presentationData);
-  if (newData) {
-    updateStateAndHistory(newData);
-  }
-}, [presentationData, updateStateAndHistory]);
+          
+          if (current[key] === undefined || current[key] === null) {
+            current[key] = !isNaN(path[i + 1]) ? [] : {};
+          }
 
+          current = current[key];
+        }
+
+        
+        const lastKey = path[path.length - 1];
+        current[lastKey] = value;
+
+        
+        
+        
+        setTimeout(() => {
+          setHistory(prev => {
+            const newHistory = prev.slice(0, historyIndex + 1);
+            newHistory.push(JSON.parse(JSON.stringify(newData)));
+            return newHistory.length > 150 ? newHistory.slice(-150) : newHistory;
+          });
+          setHistoryIndex(prev => prev + 1);
+        }, 0);
+        
+        return newData;
+        
+      } catch (error) {
+
+        alert("Bir hata oluştu. Bu alan şu anda düzenlenemiyor.");
+        return prevData;
+      }
+    });
+  }, [historyIndex]);
 
   const handleDragEnd = useCallback((event) => {
     const { active, over } = event;
@@ -144,7 +167,8 @@ const handlePresentationChange = useCallback((path, value) => {
       layout: 'title-and-content',
       content: [{ type: 'paragraph', value: '<p>İçerik ekleyin...</p>' }],
       notes: '',
-      imageKeywords: { query: 'abstract background' }
+      imageKeywords: { query: 'abstract background' },
+      imageUrl: null 
     };
     const newSlides = [...presentationData.slides, newSlide];
     const newData = { ...presentationData, slides: newSlides };
@@ -153,11 +177,15 @@ const handlePresentationChange = useCallback((path, value) => {
 
   const handleDownload = async (format, theme) => {
     if (!presentationData) return;
+    setIsDownloading(true);
+    setError('');
     try {
         await api.downloadPresentation(format, presentationData, theme);
     } catch(err) {
-        console.error(`'${format}' formatında indirilirken hata oluştu:`, err);
-        setError(err.message);
+        
+        setError(`İndirme başarısız: ${err.message}`);
+    } finally {
+        setIsDownloading(false);
     }
   };
 
@@ -173,6 +201,7 @@ const handlePresentationChange = useCallback((path, value) => {
     handleDeleteSlide,
     handleAddSlide,
     handleDownload,
+    isDownloading,
     undo,
     redo,
     canUndo: historyIndex > 0,

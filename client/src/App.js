@@ -19,6 +19,7 @@ function App() {
     topic, setTopic,
     presentationData, setPresentationData,
     isLoading,
+    isDownloading,
     error, setError,
     aiModel, setAiModel,
     handleGeneratePresentation,
@@ -74,43 +75,44 @@ function App() {
     setMobileMenuOpen(false)
   }
 
-  const loadTemplate = (template) => {
-    const processedData = {
-      ...template.data,
-      slides: template.data.slides.map((slide) => ({
-        ...slide,
-        content: slide.content.map((block) => {
-          if (block.type === 'bullet_list') {
-            return {
-              ...block,
-              items: block.items.map((item) =>
-                item.startsWith('<p>') ? item : `<p>${item}</p>`
-              ),
-            }
+const loadTemplate = (template) => {
+  const processedData = {
+    ...template.data,
+    slides: template.data.slides.map((slide) => ({
+      ...slide,
+      imageUrl: slide.imageUrl || null, 
+      content: slide.content.map((block) => {
+        if (block.type === 'bullet_list') {
+          return {
+            ...block,
+            items: block.items.map((item) =>
+              item.startsWith('<p>') ? item : `<p>${item}</p>`
+            ),
           }
-          if (block.type === 'paragraph') {
-            return {
-              ...block,
-              value: block.value.startsWith('<p>')
-                ? block.value
-                : `<p>${block.value}</p>`,
-            }
+        }
+        if (block.type === 'paragraph') {
+          return {
+            ...block,
+            value: block.value.startsWith('<p>')
+              ? block.value
+              : `<p>${block.value}</p>`,
           }
-          return block
-        }),
-      })),
-      bibliography: (template.data.bibliography || []).map(item => {
-        return typeof item === 'string' ? { citation: item } : item;
-      })
-    }
-    setPresentationData(processedData)
-    setTheme(template.theme || 'gradient-blue')
-    setError('')
-    setShowTemplatePreview(null)
-    setTimeout(() => {
-      scrollToSection('editor')
-    }, 100)
+        }
+        return block
+      }),
+    })),
+    bibliography: (template.data.bibliography || []).map(item => {
+      return typeof item === 'string' ? { citation: item } : item;
+    })
   }
+  setPresentationData(processedData)
+  setTheme(template.theme || 'gradient-blue')
+  setError('')
+  setShowTemplatePreview(null)
+  setTimeout(() => {
+    scrollToSection('editor')
+  }, 100)
+}
 
   if (isPresentationMode && presentationData) {
     let slidesForPresentation = [...(presentationData.slides || [])];
@@ -185,6 +187,16 @@ function App() {
             <div className="bg-white dark:bg-dark-card rounded-2xl p-8 flex flex-col items-center space-y-4 shadow-2xl">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
               <p className="text-lg font-medium text-gray-800 dark:text-dark-text">AI sunum hazırlıyor...</p>
+            </div>
+          </div>
+        )}
+
+        {isDownloading && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center">
+            <div className="bg-white dark:bg-dark-card rounded-2xl p-8 flex flex-col items-center space-y-4 shadow-2xl">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-500"></div>
+              <p className="text-lg font-medium text-gray-800 dark:text-dark-text">Sunum dosyası hazırlanıyor...</p>
+              <p className="text-sm text-gray-500">Bu işlem biraz sürebilir.</p>
             </div>
           </div>
         )}

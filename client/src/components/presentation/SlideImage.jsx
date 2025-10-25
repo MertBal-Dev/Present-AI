@@ -15,48 +15,25 @@ function SlideImage({ keywords, existingImageUrl, onImageChange }) {
       : 'http://localhost:5001/api'
   ), []);
 
-  // Sadece ilk mount'ta existingImageUrl varsa kullan
-  useEffect(() => {
-    if (!hasInitialized.current && existingImageUrl) {
-      console.log(`ℹ️ [Mount] Using existing image`);
-      setImageUrl(existingImageUrl);
-      hasInitialized.current = true;
-    } else if (!hasInitialized.current && !existingImageUrl) {
-      // Eğer existing image yoksa ilk fetch yap
-      hasInitialized.current = true;
-      fetchNewImage();
-    }
-  }, []); // Boş dependency - sadece ilk mount'ta çalışır
 
-  // Parent'tan gelen imageUrl değişirse güncelle
-  useEffect(() => {
-    if (existingImageUrl && existingImageUrl !== imageUrl) {
-      setImageUrl(existingImageUrl);
-    }
-  }, [existingImageUrl]);
-
-  // Image URL değiştiğinde parent'a bildir
-  useEffect(() => {
-    if (imageUrl && imageUrl !== existingImageUrl && onImageChange) {
-      onImageChange(imageUrl);
-    }
-  }, [imageUrl]);
-
-  // Görsel fetch fonksiyonu
   const fetchNewImage = async () => {
     const query = keywords?.query;
     if (!query || query.trim().length < 3) {
+      
       setError(true);
       return;
     }
 
-    if (isFetching.current) return;
+    if (isFetching.current) {
+      
+      return;
+    }
 
     isFetching.current = true;
     setIsLoading(true);
     setError(false);
 
-    console.log(`🔍 [Fetch] "${query}" için görsel aranıyor...`);
+    
 
     try {
       const response = await fetch(`${API_BASE_URL}/search-image`, {
@@ -65,17 +42,19 @@ function SlideImage({ keywords, existingImageUrl, onImageChange }) {
         body: JSON.stringify({ query, nonce: Date.now() }),
       });
 
-      if (!response.ok) throw new Error('Görsel alınamadı');
       const data = await response.json();
-      
-      if (data.imageUrl) {
-        setImageUrl(data.imageUrl);
-        console.log(`✓ [Fetch] Görsel bulundu`);
-      } else {
+
+      if (!response.ok || !data.imageUrl) {
+        
         setError(true);
+        setImageUrl(null);
+      } else {
+        setImageUrl(data.imageUrl);
+        setError(false);
+        
       }
     } catch (err) {
-      console.error('[Fetch] Error:', err);
+      
       setError(true);
     } finally {
       isFetching.current = false;
@@ -83,29 +62,64 @@ function SlideImage({ keywords, existingImageUrl, onImageChange }) {
     }
   };
 
-  // 🔥 Refresh butonu handler - SADECE buradan fetch yapılır
+
+  useEffect(() => {
+    if (!hasInitialized.current) {
+      hasInitialized.current = true;
+      if (existingImageUrl) {
+        
+        setImageUrl(existingImageUrl);
+      } else {
+        fetchNewImage();
+      }
+    }
+  }, []);
+
+
+  useEffect(() => {
+    if (existingImageUrl && existingImageUrl !== imageUrl) {
+      setImageUrl(existingImageUrl);
+    }
+  }, [existingImageUrl]);
+
+
+  useEffect(() => {
+    if (imageUrl && imageUrl !== existingImageUrl && onImageChange) {
+      onImageChange(imageUrl);
+    }
+  }, [imageUrl]);
+
+
+  useEffect(() => {
+    const query = keywords?.query;
+    if (!imageUrl && query && query.trim().length >= 3 && !isLoading && !isFetching.current) {
+      
+      fetchNewImage();
+    }
+  }, [keywords?.query]);
+
+
   const handleRefresh = async () => {
     const query = keywords?.query;
     if (!query) return;
 
-    console.log(`🔄 [Refresh] Manuel yenileme başlatılıyor...`);
     
-    // Cache'i temizle
     try {
       await fetch(`${API_BASE_URL}/clear-image-cache`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query }),
       });
-      console.log('✓ [Refresh] Cache temizlendi');
+      
     } catch (err) {
-      console.warn('[Refresh] Cache clear failed:', err);
+      
     }
-    
-    // Yeni görsel getir
+
     setImageUrl(null);
+    setError(false);
     fetchNewImage();
   };
+
 
   if (isLoading) {
     return (
@@ -118,19 +132,25 @@ function SlideImage({ keywords, existingImageUrl, onImageChange }) {
     );
   }
 
+
   if (error || !imageUrl) {
     return (
-      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-indigo-100 via-purple-50 to-pink-100">
-        <div className="text-center p-8">
-          <div className="w-32 h-32 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center">
-            <Code className="w-16 h-16 text-white" />
+      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-indigo-100 via-purple-50 to-pink-100 p-4">
+        <div className="text-center">
+          <div className="w-16 h-16 mx-auto mb-3 rounded-xl bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center shadow">
+            <Code className="w-8 h-8 text-white" />
           </div>
-          <p className="text-gray-500 text-sm mb-4">{keywords?.query || 'Görsel bulunamadı'}</p>
+          <p
+            className="text-gray-500 text-xs mb-3 line-clamp-2"
+            title={keywords?.query || 'Görsel bulunamadı'}
+          >
+            {keywords?.query || 'Görsel bulunamadı'}
+          </p>
           <button
             onClick={handleRefresh}
-            className="px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors inline-flex items-center gap-2"
+            className="px-3 py-1.5 bg-indigo-500 text-white rounded-md hover:bg-indigo-600 transition-colors inline-flex items-center gap-1 text-xs"
           >
-            <RefreshCw className="w-4 h-4" />
+            <RefreshCw className="w-3 h-3" />
             Tekrar Dene
           </button>
         </div>
@@ -138,13 +158,18 @@ function SlideImage({ keywords, existingImageUrl, onImageChange }) {
     );
   }
 
+
   return (
     <div className="w-full h-full relative overflow-hidden group">
       <img
         src={imageUrl}
         alt={keywords?.query || 'Slide image'}
         className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-        onError={() => setError(true)}
+        onError={() => {
+          
+          setError(true);
+          setImageUrl(null);
+        }}
       />
       <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
         <button

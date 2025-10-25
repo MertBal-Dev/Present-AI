@@ -3,7 +3,7 @@ const router = express.Router();
 
 const { smartImageSearch, clearCacheForQuery } = require('../services/imageService');
 
-// Görsel arama endpoint'i
+
 router.post('/search-image', async (req, res) => {
   try {
     const { query } = req.body;
@@ -25,7 +25,7 @@ router.post('/search-image', async (req, res) => {
   }
 });
 
-// 🔥 Cache temizleme endpoint'i
+
 router.post('/clear-image-cache', (req, res) => {
   try {
     const { query } = req.body;

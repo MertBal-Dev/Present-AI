@@ -17,6 +17,7 @@
     "dotenv": "^16.6.1",
     "express": "^5.1.0",
     "fontkit": "^2.0.4",
+    "multer": "^2.0.2",
     "pdf-lib": "^1.17.1",
     "pexels": "^1.4.0",
     "pptxgenjs": "^4.0.1",

@@ -124,44 +124,70 @@ async function buildPPTX(presentationData, themeName) {
 if (slide.imageUrl) {
   try {
     
-    const fetchImageWithRetry = async (url, attempts = 3) => {
-      for (let i = 0; i < attempts; i++) {
-        try {
-          return await axios.get(url, {
-            responseType: 'arraybuffer',
-            timeout: 10000,
-            maxRedirects: 5,
-            headers: { 'User-Agent': 'Mozilla/5.0', 'Referer': url },
-          });
-        } catch (error) {
-          if (i === attempts - 1) throw error;
-          await new Promise(r => setTimeout(r, 500));
-        }
-      }
-    };
+    const isLocalUpload = slide.imageUrl.includes('/uploads/');
+    let imageBuffer, contentType;
 
-    const imageResponse = await fetchImageWithRetry(slide.imageUrl);
-    const contentType = imageResponse.headers['content-type'];
+    if (isLocalUpload) {
+      const path = require('path');
+      const fs = require('fs');
+      const [, afterUploads] = slide.imageUrl.split('/uploads/');
+      const localPath = path.join(__dirname, '..', 'public', 'uploads', afterUploads);
+      console.log(`[PPTX] Yerel görsel okunuyor: ${localPath}`);
 
-    if (!['image/jpeg', 'image/png', 'image/webp'].includes(contentType)) {
-      console.warn(`⚠️ Desteklenmeyen görsel tipi atlandı: ${contentType}`);
+      if (!fs.existsSync(localPath)) throw new Error(`Yerel dosya bulunamadı: ${localPath}`);
+      imageBuffer = fs.readFileSync(localPath);
+      const ext = path.extname(localPath).slice(1).toLowerCase();
+      contentType = `image/${ext === 'jpg' ? 'jpeg' : ext}`;
     } else {
-      const fixedBuffer = await sharp(imageResponse.data).rotate().toBuffer();
-      const imageBase64 = fixedBuffer.toString('base64');
+      
+      const fetchImageWithRetry = async (url, attempts = 3) => {
+        for (let i = 0; i < attempts; i++) {
+          try {
+            return await axios.get(url, {
+              responseType: 'arraybuffer',
+              timeout: 10000,
+              maxRedirects: 5,
+              headers: { 'User-Agent': 'Mozilla/5.0', 'Referer': url },
+            });
+          } catch (error) {
+            if (i === attempts - 1) throw error;
+            await new Promise(r => setTimeout(r, 500));
+          }
+        }
+      };
 
-      pptxSlide.addImage({
-        data: `data:${contentType};base64,${imageBase64}`,
-        ...standardTemplate.imageOptions,
-        sizing: { type: 'contain', w: standardTemplate.imageOptions.w, h: standardTemplate.imageOptions.h },
-      });
+      const imageResponse = await fetchImageWithRetry(slide.imageUrl);
+      imageBuffer = imageResponse.data;
+      contentType = imageResponse.headers['content-type'] || 'image/jpeg';
     }
+
+    
+    let outBuf, mime;
+    if ((contentType || '').includes('png')) {
+      outBuf = await sharp(imageBuffer).rotate().png().toBuffer();
+      mime = 'image/png';
+    } else {
+      outBuf = await sharp(imageBuffer).rotate().jpeg({ quality: 85 }).toBuffer();
+      mime = 'image/jpeg';
+    }
+
+    const imageBase64 = outBuf.toString('base64');
+
+    
+    pptxSlide.addImage({
+      data: `data:${mime};base64,${imageBase64}`,
+      ...standardTemplate.imageOptions,
+      sizing: { type: 'contain', w: standardTemplate.imageOptions.w, h: standardTemplate.imageOptions.h },
+    });
+
   } catch (imgError) {
     console.error(
       `PPTX görsel yükleme hatası (Slide ${slide.slideNumber}):`,
-      imgError.response?.status || imgError.message
+      imgError.message
     );
   }
 }
+
 
 
 
