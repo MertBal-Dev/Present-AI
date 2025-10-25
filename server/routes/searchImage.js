@@ -1,9 +1,9 @@
 const express = require('express');
 const router = express.Router();
 
+const { smartImageSearch, clearCacheForQuery } = require('../services/imageService');
 
-const { smartImageSearch } = require('../services/imageService');
-
+// Görsel arama endpoint'i
 router.post('/search-image', async (req, res) => {
   try {
     const { query } = req.body;
@@ -25,5 +25,34 @@ router.post('/search-image', async (req, res) => {
   }
 });
 
+// 🔥 Cache temizleme endpoint'i
+router.post('/clear-image-cache', (req, res) => {
+  try {
+    const { query } = req.body;
+    
+    if (!query) {
+      return res.status(400).json({ error: 'Query gerekli.' });
+    }
+    
+    const cleared = clearCacheForQuery(query);
+    
+    if (cleared) {
+      console.log(`[ClearCache] ✓ Cache cleared for: "${query}"`);
+      res.json({ 
+        success: true, 
+        message: `Cache temizlendi: ${query}` 
+      });
+    } else {
+      console.log(`[ClearCache] ℹ️ No cache found for: "${query}"`);
+      res.json({ 
+        success: true, 
+        message: 'Cache bulunamadı (zaten temiz)' 
+      });
+    }
+  } catch (error) {
+    console.error('[ClearCache] Error:', error);
+    res.status(500).json({ error: 'Cache temizleme başarısız oldu.' });
+  }
+});
 
 module.exports = router;

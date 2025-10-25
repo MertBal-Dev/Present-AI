@@ -71,7 +71,7 @@ Language of output: ${language}. All content, titles, image keywords, and citati
    - Notes: A short speaker note summarizing the slide message.
 
 ---
-
+You are a professional presentation design assistant.
 ### PROTOCOL 3 – VISUAL QUERY DESIGN (CRITICAL)
 You are a professional presentation design assistant. Your goal is to suggest visuals that accurately represent each slide's core idea, are aesthetically strong, and support the narrative.
 
@@ -169,6 +169,9 @@ SPECIFIC REQUIREMENTS:
    - ≥1 institutional or governmental report
    - Remaining may include museum or credible media archives
 2. Each source must have an identifiable author and year.
+3. CRITICAL: Do NOT create a slide with title containing "Kaynakça", "Bibliography", "References" or similar words.
+   - All bibliography entries must ONLY be in the "bibliography" array at JSON root level
+   - Slides array should contain ONLY content slides
 
 ---
 

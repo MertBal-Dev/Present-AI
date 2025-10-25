@@ -1,12 +1,11 @@
 const axios = require('axios');
 
 const imageCache = new Map();
+const recentlyUsedImages = new Set();
+const queryResultsMap = new Map(); // 🔥 Her query için bulunan TÜM görselleri sakla
 
-/* ===================== BASIT QUERY OPTIMIZATION ===================== */
+/* ===================== QUERY OPTIMIZATION ===================== */
 
-/**
- * AI olmadan basit query iyileştirme
- */
 function enhanceSearchQuery(originalQuery) {
   const words = originalQuery.trim().split(/\s+/);
   
@@ -14,7 +13,7 @@ function enhanceSearchQuery(originalQuery) {
     primary: originalQuery,
     fallback: words.length > 3 ? words.slice(0, -1).join(' ') : originalQuery,
     generic: words.length > 2 ? words.slice(0, 2).join(' ') : originalQuery,
-    english: originalQuery 
+    english: originalQuery
   };
 }
 
@@ -37,7 +36,6 @@ function diversifyQuery(query, searchEngine = 'wikimedia') {
 
 async function validateImageQuality(url, minSize = 100000) {
   try {
-    
     if (url.startsWith('x-raw-image://')) {
       return false;
     }
@@ -71,9 +69,6 @@ async function validateImageQuality(url, minSize = 100000) {
 
 /* ===================== SEARCH ENGINES ===================== */
 
-/**
- * Google Custom Search
- */
 async function searchGoogleImages(query, options = {}) {
   const { page = 1, resultsCount = 5 } = options;
   
@@ -113,7 +108,6 @@ async function searchGoogleImages(query, options = {}) {
     for (const item of items) {
       const imageUrl = item?.link;
       
-      
       if (!imageUrl || imageUrl.startsWith('x-raw-image://')) {
         continue;
       }
@@ -138,9 +132,6 @@ async function searchGoogleImages(query, options = {}) {
   }
 }
 
-/**
- * Wikimedia Commons
- */
 async function searchWikimediaImages(query, options = {}) {
   const { resultsCount = 10 } = options;
   const cacheKey = `wiki:${query}`;
@@ -221,9 +212,6 @@ async function searchWikimediaImages(query, options = {}) {
   }
 }
 
-/**
- * Pexels API
- */
 async function searchPexelsImages(query, options = {}) {
   const { resultsCount = 5 } = options;
   const apiKey = process.env.PEXELS_API_KEY;
@@ -275,7 +263,7 @@ async function searchPexelsImages(query, options = {}) {
   }
 }
 
-/* ===================== SMART IMAGE SEARCH ===================== */
+/* ===================== SMART IMAGE SEARCH WITH ROTATION ===================== */
 
 async function smartImageSearch(queryData) {
   const query = typeof queryData === 'string' ? queryData : queryData.query;
@@ -283,14 +271,25 @@ async function smartImageSearch(queryData) {
   
   console.log(`\n[SmartSearch] Starting: "${query}"`);
   
-  const cacheKey = `smart:${query}`;
-  if (imageCache.has(cacheKey)) {
-    console.log('[SmartSearch] Cache hit');
-    return imageCache.get(cacheKey);
+  const originalQuery = queryData?.query || query;
+  
+  // 🔥 Eğer bu query için daha önce sonuçlar varsa, rotation yap
+  if (queryResultsMap.has(originalQuery)) {
+    const storedResults = queryResultsMap.get(originalQuery);
+    console.log(`[SmartSearch] 🔄 Using cached results pool (${storedResults.current + 1}/${storedResults.all.length})`);
+    
+    // Sıradaki görseli al
+    const nextImage = storedResults.all[storedResults.current];
+    
+    // Index'i artır (döngüsel)
+    storedResults.current = (storedResults.current + 1) % storedResults.all.length;
+    
+    console.log(`[SmartSearch] ✓ Returning image ${storedResults.current}/${storedResults.all.length} from ${nextImage.source}`);
+    return nextImage.url;
   }
 
   try {
-    
+    // Query variants
     const enhanced = enhanceSearchQuery(query);
     const searchQueries = [
       enhanced.primary,
@@ -298,38 +297,60 @@ async function smartImageSearch(queryData) {
       enhanced.generic
     ];
 
-    
+    let allResults = [];
+
+    // 1. Wikimedia - Daha fazla sonuç al
     for (const q of searchQueries) {
-      const results = await searchWikimediaImages(q, { resultsCount: 3 });
+      const results = await searchWikimediaImages(q, { resultsCount: 10 });
       if (results.length > 0) {
-        console.log(`[SmartSearch] ✓ Found on Wikimedia: ${results[0].url}`);
-        imageCache.set(cacheKey, results[0].url);
-        return results[0].url;
+        allResults = allResults.concat(results);
+        break;
       }
     }
 
-    
-    if (shouldUseGoogle(query)) {
-      for (const q of [searchQueries[0], queryEnglish]) {
-        const results = await searchGoogleImages(q, { resultsCount: 3 });
-        if (results.length > 0) {
-          console.log(`[SmartSearch] ✓ Found on Google: ${results[0].url}`);
-          imageCache.set(cacheKey, results[0].url);
-          return results[0].url;
+    // Eğer Wikimedia'da az sonuç varsa diğer kaynaklara bak
+    if (allResults.length < 5) {
+      console.log('[SmartSearch] Limited Wikimedia results, trying other sources');
+      
+      // 2. Google
+      if (shouldUseGoogle(query)) {
+        for (const q of [searchQueries[0], queryEnglish]) {
+          const results = await searchGoogleImages(q, { resultsCount: 5 });
+          if (results.length > 0) {
+            allResults = allResults.concat(results);
+            break;
+          }
         }
       }
+
+      // 3. Pexels
+      const pexelsResults = await searchPexelsImages(queryEnglish, { resultsCount: 5 });
+      if (pexelsResults.length > 0) {
+        allResults = allResults.concat(pexelsResults);
+      }
     }
 
+    if (allResults.length === 0) {
+      console.warn(`[SmartSearch] ✗ No images found for "${query}"`);
+      return null;
+    }
+
+    // 🎲 Sonuçları karıştır (shuffle) - her seferde farklı sıra
+    const shuffledResults = allResults.sort(() => Math.random() - 0.5);
     
-    const pexelsResults = await searchPexelsImages(queryEnglish, { resultsCount: 3 });
-    if (pexelsResults.length > 0) {
-      console.log(`[SmartSearch] ✓ Found on Pexels: ${pexelsResults[0].url}`);
-      imageCache.set(cacheKey, pexelsResults[0].url);
-      return pexelsResults[0].url;
-    }
-
-    console.warn(`[SmartSearch] ✗ No images found for "${query}"`);
-    return null;
+    // İlk görseli seç
+    const selectedImage = shuffledResults[0];
+    
+    // 💾 Tüm sonuçları sakla ve rotation için hazırla
+    queryResultsMap.set(originalQuery, {
+      all: shuffledResults,
+      current: 1 // İlkini döndük, sıradaki 1
+    });
+    
+    console.log(`[SmartSearch] ✓ Found ${shuffledResults.length} images, cached for rotation`);
+    console.log(`[SmartSearch] ✓ Selected first image from ${selectedImage.source}`);
+    
+    return selectedImage.url;
 
   } catch (error) {
     console.error(`[SmartSearch] Fatal error:`, error.message);
@@ -350,10 +371,29 @@ function shouldUseGoogle(query) {
   return importantKeywords.some(kw => lowerQuery.includes(kw)) || Math.random() < 0.3;
 }
 
+// 🔥 Cache temizleme fonksiyonu
+function clearCacheForQuery(query) {
+  if (queryResultsMap.has(query)) {
+    console.log(`[ImageService] 🗑️ Cleared rotation cache for: "${query}"`);
+    queryResultsMap.delete(query);
+    return true;
+  }
+  return false;
+}
+
+// Session sonunda temizlik
+function clearRecentlyUsed() {
+  recentlyUsedImages.clear();
+  queryResultsMap.clear();
+  console.log('[ImageService] Recently used images and rotation cache cleared');
+}
+
 module.exports = {
   smartImageSearch,
   searchWikimediaImages,
   searchGoogleImages,
   searchPexelsImages,
-  validateImageQuality
+  validateImageQuality,
+  clearRecentlyUsed,
+  clearCacheForQuery 
 };

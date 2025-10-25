@@ -3,16 +3,11 @@ import { Code, RefreshCw } from '../common/Icons';
 
 function SlideImage({ keywords, existingImageUrl, onImageChange }) {
   const [imageUrl, setImageUrl] = useState(existingImageUrl || null);
-
-  const [isLoading, setIsLoading] = useState(!existingImageUrl);
-
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(false);
-  const [page, setPage] = useState(1);
-  const [retryCount, setRetryCount] = useState(0);
 
   const isFetching = useRef(false);
-  const fetchedQueries = useRef(new Set());
-  const prevQuery = useRef(keywords?.query);
+  const hasInitialized = useRef(false);
 
   const API_BASE_URL = useMemo(() => (
     process.env.NODE_ENV === 'production'
@@ -20,89 +15,96 @@ function SlideImage({ keywords, existingImageUrl, onImageChange }) {
       : 'http://localhost:5001/api'
   ), []);
 
+  // Sadece ilk mount'ta existingImageUrl varsa kullan
+  useEffect(() => {
+    if (!hasInitialized.current && existingImageUrl) {
+      console.log(`ℹ️ [Mount] Using existing image`);
+      setImageUrl(existingImageUrl);
+      hasInitialized.current = true;
+    } else if (!hasInitialized.current && !existingImageUrl) {
+      // Eğer existing image yoksa ilk fetch yap
+      hasInitialized.current = true;
+      fetchNewImage();
+    }
+  }, []); // Boş dependency - sadece ilk mount'ta çalışır
+
+  // Parent'tan gelen imageUrl değişirse güncelle
+  useEffect(() => {
+    if (existingImageUrl && existingImageUrl !== imageUrl) {
+      setImageUrl(existingImageUrl);
+    }
+  }, [existingImageUrl]);
+
+  // Image URL değiştiğinde parent'a bildir
   useEffect(() => {
     if (imageUrl && imageUrl !== existingImageUrl && onImageChange) {
       onImageChange(imageUrl);
     }
-  }, [imageUrl, existingImageUrl, onImageChange]);
+  }, [imageUrl]);
 
-  useEffect(() => {
+  // Görsel fetch fonksiyonu
+  const fetchNewImage = async () => {
     const query = keywords?.query;
-
-    if (imageUrl || !query) {
-      setIsLoading(false);
+    if (!query || query.trim().length < 3) {
+      setError(true);
       return;
     }
 
     if (isFetching.current) return;
 
-    const queryKey = `${query}-${page}`;
-    if (fetchedQueries.current.has(queryKey)) return;
-
-    const fetchImage = async () => {
-      isFetching.current = true;
-      setIsLoading(true);
-      setError(false);
-      
-      console.log(`🔍 [Fetch] "${query}" için görsel aranıyor (page: ${page})...`);
-      
-      try {
-        const response = await fetch(`${API_BASE_URL}/search-image`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            query: query,
-            page: page,
-            nonce: Date.now(),
-          }),
-        });
-
-        if (!response.ok) throw new Error('Görsel alınamadı');
-
-        const data = await response.json();
-        if (data.imageUrl) {
-          setImageUrl(data.imageUrl);
-          fetchedQueries.current.add(queryKey);
-        } else {
-          setError(true);
-        }
-      } catch (err) {
-        setError(true);
-      } finally {
-        isFetching.current = false;
-        setIsLoading(false);
-      }
-    };
-
-    fetchImage();
-  }, [keywords?.query, page, retryCount, API_BASE_URL, imageUrl]);
-
-  useEffect(() => {
-    if (keywords?.query !== prevQuery.current) {
-      console.log(`🆕 [New Query] Sorgu değişti: "${prevQuery.current}" → "${keywords?.query}"`);
-      prevQuery.current = keywords?.query;
-      
-      setImageUrl(null);
-      setPage(1);
-      setRetryCount(0);
-      setError(false);
-      setIsLoading(true); 
-      fetchedQueries.current.clear();
-    }
-  }, [keywords?.query]);
-
-  const handleRefresh = () => {
-    console.log(`🔄 [Refresh] Manuel yenileme başlatılıyor...`);
+    isFetching.current = true;
     setIsLoading(true);
-    setImageUrl(null); 
-    
-    
-    if (retryCount < 2) {
-      setRetryCount(prev => prev + 1);
-    } else {
-      setPage(prevPage => prevPage + 1);
-      setRetryCount(0);
+    setError(false);
+
+    console.log(`🔍 [Fetch] "${query}" için görsel aranıyor...`);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/search-image`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query, nonce: Date.now() }),
+      });
+
+      if (!response.ok) throw new Error('Görsel alınamadı');
+      const data = await response.json();
+      
+      if (data.imageUrl) {
+        setImageUrl(data.imageUrl);
+        console.log(`✓ [Fetch] Görsel bulundu`);
+      } else {
+        setError(true);
+      }
+    } catch (err) {
+      console.error('[Fetch] Error:', err);
+      setError(true);
+    } finally {
+      isFetching.current = false;
+      setIsLoading(false);
     }
+  };
+
+  // 🔥 Refresh butonu handler - SADECE buradan fetch yapılır
+  const handleRefresh = async () => {
+    const query = keywords?.query;
+    if (!query) return;
+
+    console.log(`🔄 [Refresh] Manuel yenileme başlatılıyor...`);
+    
+    // Cache'i temizle
+    try {
+      await fetch(`${API_BASE_URL}/clear-image-cache`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query }),
+      });
+      console.log('✓ [Refresh] Cache temizlendi');
+    } catch (err) {
+      console.warn('[Refresh] Cache clear failed:', err);
+    }
+    
+    // Yeni görsel getir
+    setImageUrl(null);
+    fetchNewImage();
   };
 
   if (isLoading) {
@@ -124,7 +126,7 @@ function SlideImage({ keywords, existingImageUrl, onImageChange }) {
             <Code className="w-16 h-16 text-white" />
           </div>
           <p className="text-gray-500 text-sm mb-4">{keywords?.query || 'Görsel bulunamadı'}</p>
-          <button 
+          <button
             onClick={handleRefresh}
             className="px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors inline-flex items-center gap-2"
           >
@@ -145,7 +147,7 @@ function SlideImage({ keywords, existingImageUrl, onImageChange }) {
         onError={() => setError(true)}
       />
       <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
-        <button 
+        <button
           onClick={handleRefresh}
           className="p-3 bg-white/90 rounded-full text-gray-800 hover:bg-white hover:scale-110 transform transition-all shadow-lg"
           title="Başka Görsel Bul"
